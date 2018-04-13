@@ -28,7 +28,9 @@ def get_vehicle(conn):
 
 def get_vehicle_from_gps(conn):
     cursor = conn.cursor()
-    sql = "select vehicle_num from tb_gps_1709 where rownum < 10000"
+    sql = "select vehicle_num from tb_gps_1709 where speed_time" \
+          " >= to_date('2017-09-01 09:00:00', 'yyyy-mm-dd hh24:mi:ss') " \
+          "and speed_time < to_date('2017-09-01 12:00:00', 'yyyy-MM-dd hh24:mi:ss') and rownum < 8000"
     cursor.execute(sql)
     veh_set = set()
     for item in cursor.fetchall():
@@ -58,7 +60,8 @@ def save_veh(conn, veh_list):
     cursor.execute(sql)
     sql = "insert into tb_vehicle (vehicle_num, mark) values(:1, :2)"
     for veh in veh_list:
-        tup = (veh, 0)
+        last_num = int(veh[-1])
+        tup = (veh, last_num % 2)
         cursor.execute(sql, tup)
     conn.commit()
     cursor.close()
