@@ -2,6 +2,8 @@
 from ctypes import *
 import math
 import numpy as np
+import json
+import urllib2
 
 dll = WinDLL("CoordTransDLL.dll")
 
@@ -147,3 +149,13 @@ def calc_dist(pt0, pt1):
     dist = np.linalg.norm(v0 - v1)
     return dist
 
+
+def geo2addr(lng, lat):
+    ulr = "http://restapi.amap.com/v3/geocode/regeo?location={0},{1}" \
+          "&key=0a54a59bdc431189d9405b3f2937921a" \
+          "&radius=300&extensions=all".format(lng, lat)
+    temp = urllib2.urlopen(ulr)
+    temp = json.loads(temp.read())
+    geocode = temp['regeocode']
+    list0 = geocode['formatted_address']
+    return list0

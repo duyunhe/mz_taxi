@@ -7,9 +7,10 @@
 import matplotlib.pyplot as plt
 from sklearn.cluster import DBSCAN
 from xml.etree import ElementTree as ET
-from geo import bl2xy, calc_dist
+from geo import bl2xy, xy2bl, calc_dist, geo2addr
 from DBConn import oracle_util
 import numpy as np
+import math
 from time import clock
 from datetime import datetime, timedelta
 import os
@@ -21,23 +22,23 @@ EDGES = 2
 EDGE_INDEX = 4
 EDGE_LENGTH = 5
 NODE_EDGELIST = 2
-conn = oracle_util.get_connection()
+# conn = oracle_util.get_connection()
 
 color = ['r-', 'b-', 'g-', 'c-', 'm-', 'y-', 'c-', 'r-', 'b-', 'brown', 'm--', 'y--', 'c--', 'k--', 'r:']
 # region = {'primary': 0, 'secondary': 1, 'tertiary': 2,
 #           'unclassified': 5, 'trunk': 3, 'service': 4, 'trunk_link': 6,
 #           'primary_link': 7, 'secondary_link': 8, 'residential': 9}
 region = {'primary': 0, 'secondary': 1, 'tertiary': 2, 'trunk': 3}
-point_color = ['blue', 'red']
+plt_color = ['r--', 'b--', 'g--', 'k--', 'm--', 'c--']
 
 
 class TaxiData:
     def __init__(self, px, py, stime, state, speed):
         self.px, self.py, self.stime, self.state, self.speed = px, py, stime, state, speed
-        self.flag = 0
+        self.stop_index = 0
 
-    def set_flag(self, flag):
-        self.flag = flag
+    def set_index(self, index):
+        self.stop_index = index
 
 
 def cmp1(data1, data2):
@@ -126,7 +127,7 @@ def read_xml(filename):
     return way, node, edge
 
 
-def draw(trace, vehi_num):
+def draw(trace, vehi_num, str_time):
     t0 = clock()
     way, node, edge = read_xml('jq.xml')
     t1 = clock()
@@ -136,7 +137,7 @@ def draw(trace, vehi_num):
     # print t2 - t0
     plt.xlim(73126, 85276)
     plt.ylim(75749, 82509)
-    plt.title(vehi_num)
+    plt.title(vehi_num + str_time)
 
     xy_list = []
     last_point = None
@@ -161,7 +162,7 @@ def draw(trace, vehi_num):
     if len(xy_list) == 0:
         return
     x, y = zip(*xy_list)
-    db = DBSCAN(eps=80, min_samples=20).fit(X)
+    db = DBSCAN(eps=50, min_samples=15).fit(X)
 
     labels = db.labels_
     x_dict = {}
@@ -186,7 +187,63 @@ def draw(trace, vehi_num):
             plt.plot(x_dict[n], y_dict[n], color[n])
 
 
-def split_trace(trace):
+def get_list_entropy(od_list, index_list):
+    cnt = {}
+    for idx in index_list:
+        if idx == -1:
+            continue
+        try:
+            cnt[idx] += 1
+        except KeyError:
+            cnt[idx] = 1
+    target_index = []
+    for o, d in od_list:
+        if o == -1 and d != -1:
+            i = d
+        elif d == -1 and o != -1:
+            i = o
+        elif d == -1 and o == -1:
+            i = -1
+        else:
+            if cnt[o] > cnt[d]:
+                i = o
+            else:
+                i = d
+        target_index.append(i)
+    cnt = {}
+    n = len(target_index)
+    m = max(target_index) + 1
+    for idx in target_index:
+        if idx == -1:
+            idx = m
+            m += 1
+        try:
+            cnt[idx] += 1
+        except KeyError:
+            cnt[idx] = 1
+
+    entropy = 0.0
+    for key, value in cnt.items():
+        p = float(value) / n
+        entropy += -math.log(p) * p
+    return entropy
+
+
+def get_most(index_list):
+    cnt = {}
+    for idx in index_list:
+        try:
+            cnt[idx] += 1
+        except KeyError:
+            cnt[idx] = 0
+    max_value, max_key = -1, -1
+    for key, value in cnt.items():
+        if value > max_value:
+            max_key, max_value = key, value
+    return max_key
+
+
+def split_trace(trace, labels):
     stop_list = []
     bi, ei = -1, -1
     idx = 0
@@ -196,34 +253,43 @@ def split_trace(trace):
                 bi = idx
             ei = idx
         else:
-            if bi != -1 and ei - bi >= 4:
-                stop_list.append([bi, ei])
-                bi = -1
-            elif bi != -1 and ei - bi < 4:
-                bi = -1
+            if bi != -1:
+                if ei - bi >= 5:
+                    stop_list.append([bi, ei])
+            bi = -1
         idx += 1
     trace_list = []
-    lasti = 0
+    lasti, last_index = 0, 0
+    diary_index, od_index = [], []
     for stop in stop_list:
         bi, ei = stop[0], stop[1]
+        stop_indexes = []
+        for i in range(bi, ei + 1):
+            stop_indexes.append(labels[trace[i].stop_index])
+        cur_index = get_most(stop_indexes)
+        diary_index.append(cur_index)
         if bi - lasti > 1:
-            trace_list.append(trace[lasti: bi])
+            trace_list.append([trace[lasti: bi], [last_index, cur_index]])
+            od_index.append([last_index, cur_index])
         lasti = ei + 1
+        last_index = cur_index
+    # entropy = get_list_entropy(od_index, diary_index)
+    # print entropy
     idx = 0
-    for trace in trace_list:
-        print idx, trace[0].stime, trace[-1].stime, len(trace)
+    for trace, indexes in trace_list:
+        print idx, trace[0].stime, trace[-1].stime, len(trace), indexes[0], indexes[1]
         idx += 1
     return trace_list
 
 
-def get_dist(bt, vehi_num):
+def get_dist(conn, bt, vehi_num):
     str_bt = bt.strftime('%Y-%m-%d %H:%M:%S')
     end_time = bt + timedelta(hours=12)
     str_et = end_time.strftime('%Y-%m-%d %H:%M:%S')
     sql = "select px, py, speed_time, state, speed from " \
-          "TB_GPS_1803 t where speed_time >= to_date('{1}', 'yyyy-mm-dd hh24:mi:ss') " \
+          "TB_GPS_1709 t where speed_time >= to_date('{1}', 'yyyy-mm-dd hh24:mi:ss') " \
           "and speed_time < to_date('{2}', 'yyyy-MM-dd hh24:mi:ss')" \
-          " and vehicle_num = '浙{0}'".format(vehi_num, str_bt, str_et)
+          " and vehicle_num = '{0}'".format(vehi_num, str_bt, str_et)
 
     cursor = conn.cursor()
     cursor.execute(sql)
@@ -250,53 +316,14 @@ def get_dist(bt, vehi_num):
             del_time = (cur_point.stime - last_point.stime).total_seconds()
             if dist > 2000 and del_time < 60:
                 continue
+            elif del_time < 5:
+                continue
             else:
                 new_trace.append(data)
         else:
             new_trace.append(data)
         last_point = cur_point
     return new_trace
-
-    # total_minutes = 12 * 60
-    # interval_minute = 2
-    # total_cnt = total_minutes / interval_minute
-    # milleage = [0.0] * total_cnt
-    # e_cnt, f_cnt = [0] * 301, [0] * 601
-    # xlabels = []
-    # ct = bt
-    # label_cnt = total_minutes / 30
-    # for i in range(label_cnt):
-    #     xlabels.append(ct.strftime('%H:%M'))
-    #     data_span = timedelta(minutes=30)
-    #     ct = ct + data_span
-    # last_point = None
-    # cl, cb = 120.148906, 30.229587
-    # cx, cy = bl2xy(cb, cl)
-    # leifengta_point = [cx, cy]
-    # leave, cnt = [0.0] * total_cnt, [0] * total_cnt
-    # for data in trace:
-    #     cur_point = [data.px, data.py]
-    #     if last_point is not None:
-    #         cur_index = int((data.stime - bt).total_seconds() / (60 * interval_minute))
-    #         dist = calc_dist(last_point, cur_point)
-    #         dist0 = calc_dist(leifengta_point, cur_point)
-    #         milleage[cur_index] += dist
-    #         leave[cur_index] += dist0
-    #         cnt[cur_index] += 1
-    #     last_point = cur_point
-    #
-    # x = [i for i in range(total_cnt)]
-    # ly = []
-    # for i in range(total_cnt):
-    #     try:
-    #         ly.append(leave[i] / cnt[i])
-    #     except ZeroDivisionError:
-    #         if i == 0:
-    #             ly.append(0)
-    #         else:
-    #             ly.append(ly[i - 1])
-    #
-    # return trace
 
 
 def mkdir(path):
@@ -326,13 +353,65 @@ def traj_entropy(trace):
     print "cov", cov_xy(X)
 
 
-def draw_trace(trace):
+def get_label(trace):
+    xy_list = []
+    idx = 0
+    for data in trace:
+        if data.speed < 5:
+            data.set_index(idx)
+            idx += 1
+            xy_list.append([data.px, data.py])
+    X = np.array(xy_list)
+    if len(xy_list) == 0:
+        return None
+    db = DBSCAN(eps=50, min_samples=15).fit(X)
+    return db.labels_
+
+
+def save_area(conn, area_list):
+    sql = "insert into tb_area (px, py, address, mark) values(:1,:2,:3, 0)"
+    cursor = conn.cursor()
+    cursor.executemany(sql, area_list)
+    conn.commit()
+    cursor.close()
+
+
+def get_cluster_centers(trace, label):
+    sumx, sumy = {}, {}
+    cnt = {}
+    if label is None:
+        return
+    n = len(label)
+    for data in trace:
+        if data.speed < 5:
+            i = label[data.stop_index]
+            if i == -1:
+                continue
+            try:
+                sumx[i] += data.px
+                sumy[i] += data.py
+                cnt[i] += 1
+            except KeyError:
+                sumx[i], sumy[i], cnt[i] = data.px, data.py, 1
+    area_list = []
+    for key, value in cnt.items():
+        px, py = sumx[key] / cnt[key], sumy[key] / cnt[key]
+        lat, lng = xy2bl(px, py)
+        addr = geo2addr(lng, lat)
+        # print key, lng, lat, addr
+        area_list.append((lng, lat, addr))
+    # save_area(area_list)
+
+
+def draw_trace(trace, i):
     xy_list = []
     color_list = []
     for data in trace:
         xy_list.append([data.px, data.py])
         if data.speed < 5:
             color_list.append('peru')
+            stime = data.stime.strftime('%M:%S')
+            plt.text(data.px, data.py, stime)
         elif data.state == 0:
             color_list.append('g')
         else:
@@ -341,7 +420,7 @@ def draw_trace(trace):
     btime = trace[0].stime.strftime('%H:%M:%S')
     etime = trace[-1].stime.strftime('%H:%M:%S')
     x, y = zip(*xy_list)
-    plt.plot(x, y, 'k--')
+    plt.plot(x, y, plt_color[i % 6])
     plt.scatter(x, y, c=color_list)
     plt.text(x[0], y[0], btime)
     plt.text(x[-1], y[-1], etime)
@@ -351,58 +430,43 @@ def draw_trace_list(trace_list, bi, ei):
     way, node, edge = read_xml('jq.xml')
     draw_map(way, node, edge)
     for i in range(bi, ei + 1):
-        draw_trace(trace_list[i])
+        draw_trace(trace_list[i][0], i)
     plt.xlim(73126, 85276)
     plt.ylim(75749, 82509)
-
     plt.show()
 
 
-def main_vehicle(vehi_num):
+def main_vehicle(conn, vehi_num):
     print vehi_num
     mkdir("./pic/{0}".format(vehi_num))
-    # for d in range(1, 9):
-    #     begin_time = datetime(2017, 10, d, 8, 0, 0)
-    #     str_bt = begin_time.strftime('%Y-%m-%d')
-    #     fig1 = plt.figure(figsize=(12, 6))
-    #     ax = fig1.add_subplot(111)
-    #     taxi_trace = get_dist(begin_time, vehi_num)
-    #     print str_bt,
-    #     traj_entropy(taxi_trace)
-    #     str_title = './pic/{0}/'.format(vehi_num) + vehi_num + ' ' + str_bt + '.png'
-    #     draw(taxi_trace, vehi_num)
-    #     plt.subplots_adjust(left=0.06, right=0.98, bottom=0.05, top=0.96)
-    #     plt.savefig(str_title, dpi=150)
-    #     # plt.show()
-    #     plt.close(fig1)
-    for d in range(22, 23):
+    for d in range(1, 5):
         begin_time = datetime(2017, 9, d, 8, 0, 0)
         str_bt = begin_time.strftime('%Y-%m-%d')
         fig1 = plt.figure(figsize=(12, 6))
         ax = fig1.add_subplot(111)
-        taxi_trace = get_dist(begin_time, vehi_num)
+        taxi_trace = get_dist(conn, begin_time, vehi_num)
+        labels = get_label(taxi_trace)
+        get_cluster_centers(taxi_trace, labels)
         str_title = './pic/{0}/'.format(vehi_num) + vehi_num + ' ' + str_bt + '.png'
-        # draw(taxi_trace, vehi_num)
+        draw(taxi_trace, vehi_num, str_bt)
         plt.subplots_adjust(left=0.06, right=0.98, bottom=0.05, top=0.96)
         # plt.savefig(str_title, dpi=150)
-        # plt.show()
-        trace_list = split_trace(taxi_trace)
+        plt.show()
+        # trace_list = split_trace(taxi_trace, labels)
         # for trace in trace_list:
-        draw_trace_list(trace_list, 3, 7)
+        # draw_trace_list(trace_list, 14, 14)
         plt.close(fig1)
     print 'over'
 
 
 def main():
-    # vehicle_list = ['AT9344', 'AT1385', 'ATE559', 'ATG185', 'AT5310',
-    #                 'ATD792', 'ATD669', 'AT9966', 'ATB533', 'ATB541',
-    #                 'ATD105', 'ATF286', 'ATF288', 'ATF299', 'ATF358',
-    #                 'AQT371', 'AT9501', 'ATA879', 'ATA888', 'ATC709',
-    #                 'ATE027', 'ATE077', 'AT8884', 'ATD326', 'ATD560',
-    #                 'ATD565', 'ATD568', 'ATD581', 'ATE792', 'ATF266']
-    vehicle_list = ['ATF266']
+    vehicle_list = ['AT9344', 'AT1385', 'ATE559', 'ATG185', 'AT5310',
+                    'ATD792', 'ATD669', 'AT9966', 'ATB533', 'ATB541',
+                    'ATD105', 'ATF286', 'ATF288', 'ATF299', 'ATF358',
+                    'AQT371', 'AT9501', 'ATA879', 'ATA888', 'ATC709',
+                    'ATE027', 'ATE077', 'AT8884', 'ATD326', 'ATD560',
+                    'ATD565', 'ATD568', 'ATD581', 'ATE792', 'ATF266']
+    # vehicle_list = ['ATD568']
     for veh in vehicle_list:
         main_vehicle(veh)
 
-
-main()
