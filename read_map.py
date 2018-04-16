@@ -14,6 +14,8 @@ import math
 from time import clock
 from datetime import datetime, timedelta
 import os
+from matplotlib.path import Path
+
 
 os.environ['NLS_LANG'] = 'SIMPLIFIED CHINESE_CHINA.AL32UTF8'
 
@@ -148,7 +150,7 @@ def draw(trace, vehi_num, str_time):
             if last_point is not None:
                 # dist = calc_dist(cur_point, last_point)
                 # str_time = data.stime.strftime('%H:%M')
-                if data.speed > 10:
+                if data.speed > 5:
                     continue
                 xy_list.append(cur_point)
                 # plt.text(data.px, data.py, "{0},{1}".format(idx, str_time))
@@ -344,13 +346,38 @@ def cov_xy(arr):
     return sumxy / (n - 1)
 
 
-def traj_entropy(trace):
+def label_entropy(label):
+    if label is None:
+        return 0
+    n = np.shape(label)[0]
+    cnt = {}
+    ni = np.max(label)
+    for i in range(n):
+        if label[i] == -1:
+            cnt[ni] = 1
+            ni += 1
+        else:
+            try:
+                cnt[label[i]] += 1
+            except KeyError:
+                cnt[label[i]] = 1
+    p = 0.0
+    for key, value in cnt.items():
+        pi = float(value) / n
+        p += -pi * np.log(pi)
+    return p
+
+
+def get_area_label(trace, area):
     xy_list = []
     for data in trace:
-        xy_list.append([data.px, data.py])
+        if data.speed < 5 and area.contains_point([data.px, data.py]):
+            xy_list.append([data.px, data.py])
     X = np.array(xy_list)
-    print "size", len(xy_list),
-    print "cov", cov_xy(X)
+    if len(X) == 0:
+        return None
+    db = DBSCAN(eps=50, min_samples=15).fit(X)
+    return db.labels_
 
 
 def get_label(trace):
@@ -436,18 +463,81 @@ def draw_trace_list(trace_list, bi, ei):
     plt.show()
 
 
+def get_stop_point(trace, area):
+    label = get_label(trace)
+    sumx, sumy = {}, {}
+    cnt = {}
+    if label is None:
+        return 0, 0
+    n = len(label)
+    for data in trace:
+        if data.speed < 5:
+            i = label[data.stop_index]
+            if i == -1:
+                continue
+            try:
+                sumx[i] += data.px
+                sumy[i] += data.py
+                cnt[i] += 1
+            except KeyError:
+                sumx[i], sumy[i], cnt[i] = data.px, data.py, 1
+
+    cnt_in, cnt_out = 0, 0
+    for key, value in cnt.items():
+        px, py = sumx[key] / cnt[key], sumy[key] / cnt[key]
+        if area.contains_point([px, py]):
+            cnt_in += 1
+        else:
+            cnt_out += 1
+    # print cnt_in, cnt_out,
+    return cnt_in, cnt_out
+
+
+def get_area(conn):
+    cursor = conn.cursor()
+    sql = "select px, py from tb_jq order by seq"
+    cursor.execute(sql)
+    xy_list = []
+    for item in cursor.fetchall():
+        lng, lat = item[0:2]
+        x, y = bl2xy(lat, lng)
+        xy_list.append([x, y])
+
+    path = Path(xy_list)
+    return path
+
+
+def process(trace, area):
+    cnt = 0
+    for data in trace:
+        if area.contains_point([data.px, data.py]):
+            cnt += 1
+    in_per = -1
+
+    if len(trace) != 0:
+        in_per = float(cnt) / len(trace)
+    # print "%.2f %d" % (in_per, len(trace)),
+    return in_per, len(trace)
+
+
 def main_vehicle(conn, vehi_num):
+    jq_area = get_area(conn)
     print vehi_num
-    mkdir("./pic/{0}".format(vehi_num))
+    # mkdir("./pic/{0}".format(vehi_num))
     for d in range(1, 5):
         begin_time = datetime(2017, 9, d, 8, 0, 0)
         str_bt = begin_time.strftime('%Y-%m-%d')
         fig1 = plt.figure(figsize=(12, 6))
         ax = fig1.add_subplot(111)
         taxi_trace = get_dist(conn, begin_time, vehi_num)
-        labels = get_label(taxi_trace)
-        get_cluster_centers(taxi_trace, labels)
+        labels = get_area_label(taxi_trace, jq_area)
+        ent = label_entropy(labels)
+        # get_cluster_centers(taxi_trace, labels)
         str_title = './pic/{0}/'.format(vehi_num) + vehi_num + ' ' + str_bt + '.png'
+        per, gps_cnt = process(taxi_trace, jq_area)
+        stop_in, stop_out = get_stop_point(taxi_trace, jq_area)
+        tup = (vehi_num, gps_cnt, stop_in, stop_out, per, ent, str_bt)
+        print tup
         draw(taxi_trace, vehi_num, str_bt)
         plt.subplots_adjust(left=0.06, right=0.98, bottom=0.05, top=0.96)
         # plt.savefig(str_title, dpi=150)
