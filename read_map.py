@@ -7,7 +7,7 @@
 import matplotlib.pyplot as plt
 from sklearn.cluster import DBSCAN
 from xml.etree import ElementTree as ET
-from geo import bl2xy, xy2bl, calc_dist, geo2addr
+from geo import bl2xy, xy2bl, calc_dist
 from DBConn import oracle_util
 import numpy as np
 import math
@@ -15,6 +15,7 @@ from time import clock
 from datetime import datetime, timedelta
 import os
 from matplotlib.path import Path
+from pre import get_data, get_vehicle_mark
 
 
 os.environ['NLS_LANG'] = 'SIMPLIFIED CHINESE_CHINA.AL32UTF8'
@@ -30,7 +31,7 @@ color = ['r-', 'b-', 'g-', 'c-', 'm-', 'y-', 'c-', 'r-', 'b-', 'brown', 'm--', '
 # region = {'primary': 0, 'secondary': 1, 'tertiary': 2,
 #           'unclassified': 5, 'trunk': 3, 'service': 4, 'trunk_link': 6,
 #           'primary_link': 7, 'secondary_link': 8, 'residential': 9}
-region = {'primary': 0, 'secondary': 1, 'tertiary': 2, 'trunk': 3}
+region = {'primary': 0, 'secondary': 1, 'tertiary': 2, 'trunk': 3, 'unclassified': 5}
 plt_color = ['r--', 'b--', 'g--', 'k--', 'm--', 'c--']
 
 
@@ -68,7 +69,7 @@ def draw_map(way, node, edge):
             c = color[region[pl['highway']]]
         except KeyError:
             continue
-        plt.plot(x, y, c, alpha=0.3)
+        plt.plot(x, y, c, alpha=0.5)
 
 
 def read_xml(filename):
@@ -361,7 +362,7 @@ def label_entropy(label):
                 cnt[label[i]] += 1
             except KeyError:
                 cnt[label[i]] = 1
-    p = 0.0
+    p = 0
     for key, value in cnt.items():
         pi = float(value) / n
         p += -pi * np.log(pi)
@@ -424,10 +425,23 @@ def get_cluster_centers(trace, label):
     for key, value in cnt.items():
         px, py = sumx[key] / cnt[key], sumy[key] / cnt[key]
         lat, lng = xy2bl(px, py)
-        addr = geo2addr(lng, lat)
+        # addr = geo2addr(lng, lat)
         # print key, lng, lat, addr
-        area_list.append((lng, lat, addr))
+        # area_list.append((lng, lat, addr))
     # save_area(area_list)
+
+
+def draw_data(trace):
+    xy_list = []
+    stop_list = []
+    for data in trace:
+        if data.speed < 5:
+            stop_list.append([data.px, data.py])
+        xy_list.append([data.px, data.py])
+    x, y = zip(*xy_list)
+    plt.plot(x, y, 'k--')
+    x, y = zip(*stop_list)
+    plt.scatter(x, y, c='b')
 
 
 def draw_trace(trace, i):
@@ -530,14 +544,14 @@ def main_vehicle(conn, vehi_num):
         fig1 = plt.figure(figsize=(12, 6))
         ax = fig1.add_subplot(111)
         taxi_trace = get_dist(conn, begin_time, vehi_num)
-        labels = get_area_label(taxi_trace, jq_area)
-        ent = label_entropy(labels)
+        # labels = get_area_label(taxi_trace, jq_area)
+        # ent = label_entropy(labels)
         # get_cluster_centers(taxi_trace, labels)
         str_title = './pic/{0}/'.format(vehi_num) + vehi_num + ' ' + str_bt + '.png'
-        per, gps_cnt = process(taxi_trace, jq_area)
-        stop_in, stop_out = get_stop_point(taxi_trace, jq_area)
-        tup = (vehi_num, gps_cnt, stop_in, stop_out, per, ent, str_bt)
-        print tup
+        # per, gps_cnt = process(taxi_trace, jq_area)
+        # stop_in, stop_out = get_stop_point(taxi_trace, jq_area)
+        # tup = (vehi_num, gps_cnt, stop_in, stop_out, per, ent, str_bt)
+        # print tup
         draw(taxi_trace, vehi_num, str_bt)
         plt.subplots_adjust(left=0.06, right=0.98, bottom=0.05, top=0.96)
         # plt.savefig(str_title, dpi=150)
@@ -550,13 +564,15 @@ def main_vehicle(conn, vehi_num):
 
 
 def main():
-    vehicle_list = ['AT9344', 'AT1385', 'ATE559', 'ATG185', 'AT5310',
-                    'ATD792', 'ATD669', 'AT9966', 'ATB533', 'ATB541',
-                    'ATD105', 'ATF286', 'ATF288', 'ATF299', 'ATF358',
-                    'AQT371', 'AT9501', 'ATA879', 'ATA888', 'ATC709',
-                    'ATE027', 'ATE077', 'AT8884', 'ATD326', 'ATD560',
-                    'ATD565', 'ATD568', 'ATD581', 'ATE792', 'ATF266']
-    # vehicle_list = ['ATD568']
-    for veh in vehicle_list:
-        main_vehicle(veh)
+    conn = oracle_util.get_connection()
+    way, node, edge = read_xml('jq0.xml')
+    draw_map(way, node, edge)
+    begin_time = datetime(2018, 3, 4, 8)
+    vehicle = ['ATF630']
+    for veh in vehicle:
+        taxi_trace = get_data(conn, begin_time, veh)
+        draw_data(taxi_trace)
 
+
+main()
+plt.show()

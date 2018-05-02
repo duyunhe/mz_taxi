@@ -25,8 +25,8 @@ def get_connection():
                                'password': pswd,
                                'dsn': '{0}:{1}/{2}'.format(host, port, sid)}}
     pool = PooledDB(creator=cx_Oracle,
-                    mincached=10,
-                    maxcached=100,
+                    mincached=20,
+                    maxcached=200,
                     **sql_settings['oracle'])
     db_conn = pool.connection()
     return db_conn

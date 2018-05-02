@@ -13,7 +13,7 @@ import numpy as np
 
 def get_vehicle(conn):
     cursor = conn.cursor()
-    sql = "select vehicle_num from tb_vehicle where mark = 0"
+    sql = "select vehicle_num from tb_vehicle"
     cursor.execute(sql)
     veh_set = set()
     for item in cursor.fetchall():
@@ -23,14 +23,14 @@ def get_vehicle(conn):
     for veh in veh_set:
         veh_list.append(veh)
     cursor.close()
-    return veh_list
+    return veh_set
 
 
 def get_vehicle_from_gps(conn):
     cursor = conn.cursor()
     sql = "select vehicle_num from tb_gps_1709 where speed_time" \
-          " >= to_date('2017-09-01 09:00:00', 'yyyy-mm-dd hh24:mi:ss') " \
-          "and speed_time < to_date('2017-09-01 12:00:00', 'yyyy-MM-dd hh24:mi:ss') and rownum < 8000"
+          " >= to_date('2017-09-01 12:00:00', 'yyyy-mm-dd hh24:mi:ss') " \
+          "and speed_time < to_date('2017-09-01 13:00:00', 'yyyy-MM-dd hh24:mi:ss') and rownum < 10000"
     cursor.execute(sql)
     veh_set = set()
     for item in cursor.fetchall():
@@ -40,7 +40,7 @@ def get_vehicle_from_gps(conn):
     for veh in veh_set:
         veh_list.append(veh)
     cursor.close()
-    return veh_list
+    return veh_set
 
 
 def get_data(conn, veh):
@@ -88,7 +88,10 @@ def save_normal_veh(conn, veh_list):
 def main():
     conn = oracle_util.get_connection()
     jq_area = get_area(conn)
-    veh_list = get_vehicle_from_gps(conn)
+    vs0 = get_vehicle_from_gps(conn)
+    vs1 = get_vehicle(conn)
+    vs = vs0 - vs1
+    veh_list = [veh for veh in vs]
     save_veh(conn, veh_list)
     return
     normal_list = []
@@ -113,6 +116,6 @@ def main():
 
     # save_record(conn, tup_list)
 
-main()
-
+if __name__ == "main":
+    main()
 

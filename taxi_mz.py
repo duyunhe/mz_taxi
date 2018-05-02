@@ -24,7 +24,8 @@ def load_data(filename):
 
 def load_database():
     conn = oracle_util.get_connection()
-    sql = "select stop_in_count, stop_out_count, gps_in_per, stop_in_entropy, type from tb_record"
+    sql = "select stop_in_count, stop_out_count, gps_in_per, stop_in_entropy, type from tb_record " \
+          "where mark = 1"
     cursor = conn.cursor()
     cursor.execute(sql)
     data_list, label_list = [], []
