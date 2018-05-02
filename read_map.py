@@ -574,5 +574,6 @@ def main():
         draw_data(taxi_trace)
 
 
+
 main()
 plt.show()
