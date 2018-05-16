@@ -627,6 +627,8 @@ def DYN_MATCH(traj_order):
 
 
 def draw_trace(traj):
+    if len(traj) == 0:
+        return
     x, y = [], []
     for data in traj:
         x.append(data.px)
@@ -655,6 +657,3 @@ def matching(trace):
     #
     traj_mod, dist = POINT_MATCH(trace)
     return dist
-
-
-read_xml()

@@ -8,15 +8,17 @@ from DBConn import oracle_util
 from datetime import datetime, timedelta
 from geo import bl2xy, calc_dist
 from time import clock
+import matplotlib.pyplot as plt
+from map_matching import read_xml, draw_map, draw_trace
 import os
 
 os.environ['NLS_LANG'] = 'SIMPLIFIED CHINESE_CHINA.AL32UTF8'
 
 
 class TaxiData:
-    def __init__(self, px, py, stime, state, speed, direction):
+    def __init__(self, px, py, stime, state, speed, direction, cstate):
         self.px, self.py, self.stime, self.state, self.speed = px, py, stime, state, speed
-        self.stop_index, self.direction = 0, direction
+        self.stop_index, self.direction, car_state = 0, direction, cstate
 
     def set_index(self, index):
         self.stop_index = index
@@ -31,9 +33,40 @@ def cmp1(data1, data2):
         return 0
 
 
+def get_data_by_time(conn, begin_time, end_time, veh):
+    str_bt = begin_time.strftime('%Y-%m-%d %H:%M:%S')
+    str_et = end_time.strftime('%Y-%m-%d %H:%M:%S')
+    sql = "select px, py, speed_time, state, speed, direction, carstate from " \
+          "TB_GPS_1709 t where speed_time >= to_date('{1}', 'yyyy-mm-dd hh24:mi:ss') " \
+          "and speed_time < to_date('{2}', 'yyyy-MM-dd hh24:mi:ss')" \
+          " and vehicle_num = '{0}'".format(veh, str_bt, str_et)
+    try:
+        cursor = conn.cursor()
+        cursor.execute(sql)
+        trace = []
+        for item in cursor.fetchall():
+            lng, lat = map(float, item[0:2])
+            if 119 < lng < 121 and 29 < lat < 31:
+                px, py = bl2xy(lat, lng)
+                state = int(item[3])
+                stime = item[2]
+                speed = float(item[4])
+                direction = float(item[5])
+                car_state = int(item[6])
+                taxi_data = TaxiData(px, py, stime, state, speed, direction, car_state)
+                trace.append(taxi_data)
+    except Exception as e:
+        print e.message
+        return []
+    # print len(trace)
+    trace.sort(cmp1)
+    print len(trace)
+    return trace
+
+
 def get_data(conn, bt, vehi_num):
     str_bt = bt.strftime('%Y-%m-%d %H:%M:%S')
-    end_time = bt + timedelta(hours=10)
+    end_time = bt + timedelta(hours=16)
     str_et = end_time.strftime('%Y-%m-%d %H:%M:%S')
     sql = "select px, py, speed_time, state, speed, direction from " \
           "TB_GPS_1803 t where speed_time >= to_date('{1}', 'yyyy-mm-dd hh24:mi:ss') " \
@@ -67,7 +100,7 @@ def get_data(conn, bt, vehi_num):
             del_time = (cur_point.stime - last_point.stime).total_seconds()
             if del_time < 5:
                 continue
-            elif data.speed != 0 and last_point.speed == data.speed and last_point.direction == data.direction:
+            elif last_point.speed == data.speed >= 5 and last_point.direction == data.direction:
                 continue
             elif del_time * 40 < dist:
                 continue
@@ -94,15 +127,25 @@ def get_vehicle_mark(conn, mark):
 
 
 def main():
-    conn = oracle_util.get_connection()
-    bt = clock()
-    vehicle = get_vehicle_mark(conn, 0)
-    vehicle = ['AT8019']
-    bd = datetime(2018, 3, 1, 8)
-    for v in vehicle:
-        print v
-        data = get_data(conn, bd, v)
-        print(len(data))
-    et = clock()
-    print et - bt
+    try:
+        conn = oracle_util.get_connection()
+        bt = clock()
+        # vehicle = get_vehicle_mark(conn, 0)
+        vehicle = ['AT5639']
+        bd = datetime(2017, 9, 1, 10)
+        ed = datetime(2017, 9, 1, 16)
+        for v in vehicle:
+            data = get_data_by_time(conn, bd, ed, v)
+            draw_trace(data)
+        et = clock()
+        print 'load data', et - bt
+    except Exception as e:
+        print e.message
+    read_xml('hz.xml')
+    draw_map()
+    plt.show()
+
+
+main()
+
 

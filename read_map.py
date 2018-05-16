@@ -437,6 +437,7 @@ def draw_data(trace):
     for data in trace:
         if data.speed < 5:
             stop_list.append([data.px, data.py])
+            # plt.text(data.px, data.py, '{0}'.format(data.direction))
         xy_list.append([data.px, data.py])
     x, y = zip(*xy_list)
     plt.plot(x, y, 'k--')
@@ -557,7 +558,7 @@ def main_vehicle(conn, vehi_num):
         # plt.savefig(str_title, dpi=150)
         plt.show()
         # trace_list = split_trace(taxi_trace, labels)
-        # for trace in trace_list:
+        # for trace in trace_list
         # draw_trace_list(trace_list, 14, 14)
         plt.close(fig1)
     print 'over'
@@ -567,13 +568,11 @@ def main():
     conn = oracle_util.get_connection()
     way, node, edge = read_xml('jq0.xml')
     draw_map(way, node, edge)
-    begin_time = datetime(2018, 3, 4, 8)
-    vehicle = ['ATF630']
+    begin_time = datetime(2018, 3, 7, 8)
+    vehicle = ['AT3404']
     for veh in vehicle:
         taxi_trace = get_data(conn, begin_time, veh)
         draw_data(taxi_trace)
-
-
 
 main()
 plt.show()
