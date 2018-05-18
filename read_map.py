@@ -287,7 +287,7 @@ def split_trace(trace, labels):
 
 def get_dist(conn, bt, vehi_num):
     str_bt = bt.strftime('%Y-%m-%d %H:%M:%S')
-    end_time = bt + timedelta(hours=12)
+    end_time = bt + timedelta(hours=10)
     str_et = end_time.strftime('%Y-%m-%d %H:%M:%S')
     sql = "select px, py, speed_time, state, speed from " \
           "TB_GPS_1709 t where speed_time >= to_date('{1}', 'yyyy-mm-dd hh24:mi:ss') " \
@@ -574,5 +574,5 @@ def main():
         taxi_trace = get_data(conn, begin_time, veh)
         draw_data(taxi_trace)
 
-main()
-plt.show()
+# main()
+# plt.show()

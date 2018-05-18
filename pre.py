@@ -34,12 +34,22 @@ def cmp1(data1, data2):
 
 
 def get_data_by_time(conn, begin_time, end_time, veh):
+    """
+    获取GPS数据
+    :param conn: oracle连接 
+    :param begin_time: 起始时间
+    :param end_time: 结束时间
+    :param veh: 车牌号
+    :return: list of TaxiData
+    """
     str_bt = begin_time.strftime('%Y-%m-%d %H:%M:%S')
     str_et = end_time.strftime('%Y-%m-%d %H:%M:%S')
     sql = "select px, py, speed_time, state, speed, direction, carstate from " \
           "TB_GPS_1709 t where speed_time >= to_date('{1}', 'yyyy-mm-dd hh24:mi:ss') " \
           "and speed_time < to_date('{2}', 'yyyy-MM-dd hh24:mi:ss')" \
           " and vehicle_num = '{0}'".format(veh, str_bt, str_et)
+    # 存放到TaxiData中
+    # 返回TaxiData的list
     try:
         cursor = conn.cursor()
         cursor.execute(sql)
@@ -59,7 +69,7 @@ def get_data_by_time(conn, begin_time, end_time, veh):
         print e.message
         return []
     # print len(trace)
-    trace.sort(cmp1)
+    trace.sort(cmp1)      # 排序
     print len(trace)
     return trace
 
@@ -126,6 +136,16 @@ def get_vehicle_mark(conn, mark):
     return veh_list
 
 
+def pre_process_data(trace):
+    """
+    预处理轨迹
+    :param trace: list of TaxiData 
+    :return: 处理后的轨迹: list of TaxiData
+    """
+    new_trace = trace
+    return new_trace
+
+
 def main():
     try:
         conn = oracle_util.get_connection()
@@ -133,10 +153,11 @@ def main():
         # vehicle = get_vehicle_mark(conn, 0)
         vehicle = ['AT5639']
         bd = datetime(2017, 9, 1, 10)
-        ed = datetime(2017, 9, 1, 16)
+        ed = datetime(2017, 9, 1, 12)
         for v in vehicle:
             data = get_data_by_time(conn, bd, ed, v)
-            draw_trace(data)
+            modified_data = pre_process_data(data)
+            draw_trace(modified_data)
         et = clock()
         print 'load data', et - bt
     except Exception as e:

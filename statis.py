@@ -80,7 +80,7 @@ def process(trace, area):
             cnt += 1
     in_per = -1
     if len(trace) != 0:
-        in_per = float(cnt) / len(trace) * 100
+        in_per = float(cnt) / len(trace)
     # print "%.2f %d" % (in_per, len(trace)),
     return in_per, len(trace)
 

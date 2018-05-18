@@ -29,7 +29,7 @@ def get_vehicle(conn):
 
 def save_record(conn, tup_list):
     cursor = conn.cursor()
-    sql = "insert into tb_record (vehicle_num, gps_count, stop_in_count, " \
+    sql = "insert into tb_record1 (vehicle_num, gps_count, stop_in_count, " \
           "stop_out_count, gps_in_per, stop_in_entropy, gps_date, type) values(:1, :2, :3, :4, :5, :6, :7, :8)"
     cursor.executemany(sql, tup_list)
     conn.commit()
@@ -65,8 +65,8 @@ def main():
     jq_area = get_area(conn)
 
     # ab_list = get_vehicle(conn)
-    ab_list = ['ATB942']
-    print len(ab_list)
+    ab_list = ['ATB769']
+    # print len(ab_list)
     weights = load_model('model.txt')
 
     cnt = 0
@@ -81,14 +81,13 @@ def main():
             str_bt = begin_time.strftime('%Y-%m-%d')
             taxi_trace = get_dist(conn, begin_time, veh)
             per, gps_cnt = process(taxi_trace, jq_area)
-            stop_in, stop_out = get_stop_point(taxi_trace, jq_area)
-            labels = get_area_label(taxi_trace, jq_area)
-            ent = label_entropy(labels)
-            # if per > 30:
-            #     print str_bt, "%.2f %d %d %d" % (per, gps_cnt, stop_in, stop_out)
             if gps_cnt > 360:
+                stop_in, stop_out = get_stop_point(taxi_trace, jq_area)
+                labels = get_area_label(taxi_trace, jq_area)
+                ent = label_entropy(labels)
                 tup = (veh, gps_cnt, stop_in, stop_out, per, ent, str_bt)
                 tup_list.append(tup)
+        break
         mz_flag = 0
         if len(tup_list) > 0:
             data_mat = load_from_data(tup_list)
@@ -103,7 +102,7 @@ def main():
                 ans_list.append(tup)
         # if mz_flag:
         #     save_record(conn, ans_list)
-        main_vehicle(conn, ab_list[0])
+        # main_vehicle(conn, ab_list[0])
     et = time.clock()
     print et - bt
     conn.close()
