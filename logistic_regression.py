@@ -62,6 +62,7 @@ def predict(data, w):
     """
     h = sigmoid(data * w.T)
     m = np.shape(h)[0]
+    # org = h.copy()
     for i in xrange(m):
         if h[i, 0] < 0.5:
             h[i, 0] = 0
