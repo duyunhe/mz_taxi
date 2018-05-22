@@ -38,10 +38,13 @@ plt_color = ['r--', 'b--', 'g--', 'k--', 'm--', 'c--']
 class TaxiData:
     def __init__(self, px, py, stime, state, speed):
         self.px, self.py, self.stime, self.state, self.speed = px, py, stime, state, speed
-        self.stop_index = 0
+        self.stop_index, self.inside = 0, False
 
     def set_index(self, index):
         self.stop_index = index
+
+    def set_inside(self, inside):
+        self.inside = inside
 
 
 def cmp1(data1, data2):
@@ -69,7 +72,7 @@ def draw_map(way, node, edge):
             c = color[region[pl['highway']]]
         except KeyError:
             continue
-        plt.plot(x, y, c, alpha=0.5)
+        plt.plot(x, y, c, alpha=0.2)
 
 
 def read_xml(filename):
@@ -138,9 +141,9 @@ def draw(trace, vehi_num, str_time):
     draw_map(way, node, edge)
     t2 = clock()
     # print t2 - t0
-    plt.xlim(73126, 85276)
-    plt.ylim(75749, 82509)
-    plt.title(vehi_num + str_time)
+    plt.xlim(68638, 86954)
+    plt.ylim(75749, 84721)
+    plt.title(vehi_num + ' ' + str_time)
 
     xy_list = []
     last_point = None
@@ -152,7 +155,7 @@ def draw(trace, vehi_num, str_time):
                 # dist = calc_dist(cur_point, last_point)
                 # str_time = data.stime.strftime('%H:%M')
                 if data.speed > 5:
-                    continue
+                    flag = 0
                 xy_list.append(cur_point)
                 # plt.text(data.px, data.py, "{0},{1}".format(idx, str_time))
                 idx += 1
@@ -285,14 +288,15 @@ def split_trace(trace, labels):
     return trace_list
 
 
-def get_dist(conn, bt, vehi_num):
+def get_dist(conn, bt, vehi_num, area):
+    _bt = clock()
     str_bt = bt.strftime('%Y-%m-%d %H:%M:%S')
     end_time = bt + timedelta(hours=10)
     str_et = end_time.strftime('%Y-%m-%d %H:%M:%S')
     sql = "select px, py, speed_time, state, speed from " \
-          "TB_GPS_1709 t where speed_time >= to_date('{1}', 'yyyy-mm-dd hh24:mi:ss') " \
+          "TB_GPS_1803 t where speed_time >= to_date('{1}', 'yyyy-mm-dd hh24:mi:ss') " \
           "and speed_time < to_date('{2}', 'yyyy-MM-dd hh24:mi:ss')" \
-          " and vehicle_num = '{0}'".format(vehi_num, str_bt, str_et)
+          " and vehicle_num = '浙{0}'".format(vehi_num, str_bt, str_et)
 
     cursor = conn.cursor()
     cursor.execute(sql)
@@ -307,6 +311,8 @@ def get_dist(conn, bt, vehi_num):
             stime = item[2]
             speed = float(item[4])
             taxi_data = TaxiData(px, py, stime, state, speed)
+            if area.contains_point([px, py]):
+                taxi_data.set_inside(True)
             trace.append(taxi_data)
     # print len(trace)
     trace.sort(cmp1)
@@ -326,6 +332,8 @@ def get_dist(conn, bt, vehi_num):
         else:
             new_trace.append(data)
         last_point = cur_point
+    _et = clock()
+    # print 'select ', _et - _bt
     return new_trace
 
 
@@ -372,7 +380,7 @@ def label_entropy(label):
 def get_area_label(trace, area):
     xy_list = []
     for data in trace:
-        if data.speed < 5 and area.contains_point([data.px, data.py]):
+        if data.speed < 5 and data.inside:
             xy_list.append([data.px, data.py])
     X = np.array(xy_list)
     if len(X) == 0:
@@ -479,15 +487,21 @@ def draw_trace_list(trace_list, bi, ei):
 
 
 def get_stop_point(trace, area):
+    bt = clock()
     label = get_label(trace)
+    et = clock()
+    # print 'dbscan ', et - bt
     sumx, sumy = {}, {}
     cnt = {}
     if label is None:
-        return 0, 0
+        return 0, 0, 0
     n = len(label)
+    stop_label_list = []
     for data in trace:
         if data.speed < 5:
             i = label[data.stop_index]
+            if data.inside:
+                stop_label_list.append(i)
             if i == -1:
                 continue
             try:
@@ -505,7 +519,12 @@ def get_stop_point(trace, area):
         else:
             cnt_out += 1
     # print cnt_in, cnt_out,
-    return cnt_in, cnt_out
+    try:
+        stop_in_labels = np.array(stop_label_list)
+        ent = label_entropy(stop_in_labels)
+    except ValueError:
+        ent = 0
+    return cnt_in, cnt_out, ent
 
 
 def get_area(conn):
@@ -525,7 +544,7 @@ def get_area(conn):
 def process(trace, area):
     cnt = 0
     for data in trace:
-        if area.contains_point([data.px, data.py]):
+        if data.inside is True:
             cnt += 1
     in_per = -1
 
@@ -538,13 +557,13 @@ def process(trace, area):
 def main_vehicle(conn, vehi_num):
     jq_area = get_area(conn)
     print vehi_num
-    # mkdir("./pic/{0}".format(vehi_num))
-    for d in range(1, 5):
-        begin_time = datetime(2017, 9, d, 8, 0, 0)
+    mkdir("./pic/{0}".format(vehi_num))
+    for d in range(20, 21):
+        begin_time = datetime(2018, 3, d, 8, 0, 0)
         str_bt = begin_time.strftime('%Y-%m-%d')
         fig1 = plt.figure(figsize=(12, 6))
         ax = fig1.add_subplot(111)
-        taxi_trace = get_dist(conn, begin_time, vehi_num)
+        taxi_trace = get_dist(conn, begin_time, vehi_num, jq_area)
         # labels = get_area_label(taxi_trace, jq_area)
         # ent = label_entropy(labels)
         # get_cluster_centers(taxi_trace, labels)
@@ -555,8 +574,8 @@ def main_vehicle(conn, vehi_num):
         # print tup
         draw(taxi_trace, vehi_num, str_bt)
         plt.subplots_adjust(left=0.06, right=0.98, bottom=0.05, top=0.96)
-        # plt.savefig(str_title, dpi=150)
-        plt.show()
+        plt.savefig(str_title, dpi=200)
+        # plt.show()
         # trace_list = split_trace(taxi_trace, labels)
         # for trace in trace_list
         # draw_trace_list(trace_list, 14, 14)
