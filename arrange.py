@@ -52,7 +52,7 @@ def savepng():
                'ATE027', 'ATE077', 'AT8884', 'ATD326', 'ATD560',
                'ATD565', 'ATD568', 'ATD581', 'ATE792', 'ATF266']
     # ab_list = ['AT9501']
-    ab_list = query()
+    # ab_list = query()
     conn = oracle_util.get_connection()
     for veh in ab_list:
         main_vehicle(conn, veh)
