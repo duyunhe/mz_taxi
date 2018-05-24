@@ -11,6 +11,7 @@ from geo import bl2xy, xy2bl, calc_dist
 from DBConn import oracle_util
 import numpy as np
 import math
+from area import get_key_area
 from time import clock
 from datetime import datetime, timedelta
 import os
@@ -130,7 +131,7 @@ def read_xml(filename):
     return way, node, edge
 
 
-def draw(trace, vehi_num, str_time):
+def draw(trace, vehi_num, str_time, labels, X):
     way, node, edge = read_xml('jq.xml')
     draw_map(way, node, edge)
 
@@ -168,13 +169,12 @@ def draw(trace, vehi_num, str_time):
     x, y = zip(*all_list)
     plt.plot(x, y, 'k', marker='+', ls='None', alpha=alpha, ms=4.5)
 
-    X = np.array(xy_list)
     if len(xy_list) == 0:
         return
-    x, y = zip(*xy_list)
-    db = DBSCAN(eps=50, min_samples=15).fit(X)
-
-    labels = db.labels_
+    # x, y = zip(*xy_list)
+    # db = DBSCAN(eps=50, min_samples=15).fit(X)
+    #
+    # labels = db.labels_
     x_dict = {}
     y_dict = {}
     label = set(labels)
@@ -185,14 +185,14 @@ def draw(trace, vehi_num, str_time):
         x_dict[labels[i]].append(X[:, 0][i])
         y_dict[labels[i]].append(X[:, 1][i])
 
-    colors = ['ro', 'co', 'yo', 'co', 'mo', 'yo', 'ko', 'rs', 'bs', 'gs', 'ms', 'y*', 'cs', 'ks', 'r^', 'g^', 'k^', 'c^',
+    colors = ['ro', 'yo', 'co', 'go', 'mo', 'rs', 'ys', 'cs', 'gs', 'ms', 'ms', 'y*', 'cs', 'ks', 'r^', 'g^', 'k^', 'c^',
              'm^', 'b^', 'yd', 'r*', 'b*', 'g*', 'm*', 'c*', 'k*', 'y^', 'b+', 'g+', 'c+', 'm+', 'k+', 'rp',
              'bp', 'gp', 'cp', 'yp', 'mp', 'kp', 'rd', 'r+', 'gd', 'cd', 'ys', 'kd', 'md', 'bd', 'rx', 'bx', 'gx', 'cx',
              'mx', 'yx', 'kx', 'r>', 'b>', 'g>', 'y>', 'm>', 'c>', 'k>', 'y.', 'k+']
 
     for n in x_dict:
         if n != -1:
-            plt.plot(x_dict[n], y_dict[n], colors[n % 6])
+            plt.plot(x_dict[n], y_dict[n], colors[n % 10])
 
 
 def get_list_entropy(od_list, index_list):
@@ -377,13 +377,13 @@ def label_entropy(label):
 def get_area_label(trace, area):
     xy_list = []
     for data in trace:
-        if data.speed < 5 and area.contains_point([data.px, data.py]):
+        if data.speed < 5:
             xy_list.append([data.px, data.py])
     X = np.array(xy_list)
     if len(X) == 0:
-        return None
+        return None, X
     db = DBSCAN(eps=50, min_samples=15).fit(X)
-    return db.labels_
+    return db.labels_, X
 
 
 def get_label(trace):
@@ -396,9 +396,9 @@ def get_label(trace):
             xy_list.append([data.px, data.py])
     X = np.array(xy_list)
     if len(xy_list) == 0:
-        return None
+        return None, X
     db = DBSCAN(eps=50, min_samples=15).fit(X)
-    return db.labels_
+    return db.labels_, X
 
 
 def save_area(conn, area_list):
@@ -431,9 +431,10 @@ def get_cluster_centers(trace, label):
         px, py = sumx[key] / cnt[key], sumy[key] / cnt[key]
         lat, lng = xy2bl(px, py)
         # addr = geo2addr(lng, lat)
-        # print key, lng, lat, addr
-        # area_list.append((lng, lat, addr))
+        print key, lng, lat, cnt[key]
+        area_list.append((lng, lat))
     # save_area(area_list)
+    return area_list
 
 
 def draw_data(trace):
@@ -527,6 +528,31 @@ def get_area(conn):
     return path
 
 
+def get_cluster_name(veh, str_time, centers, areas):
+    """
+    针对每一个cluster中心点计算最近的已知常驻营运地点
+    :param centers: center list
+    :param areas: area list [[px, py, address], ...]
+    :return: address list, 如没有临近1000米内的已知点，返回未知
+    """
+    fp = open('area.txt', 'a')
+    fp.write(veh + ',' + str_time + '\n')
+    for center in centers:
+        x, y = bl2xy(center[1], center[0])
+        min_dist, sel_address = 1e20, None
+        for a in areas:
+            px, py = bl2xy(a[1], a[0])
+            dist = calc_dist([x, y], [px, py])
+            if min_dist > dist:
+                min_dist, sel_address = dist, a[2]
+        if min_dist > 500:
+            sel_address = '未知'
+        # print sel_address, min_dist
+        str_line = str(center[0]) + ',' + str(center[1]) + ',' + sel_address + '\n'
+        fp.write(str_line)
+    fp.close()
+
+
 def get_type(conn, veh, str_time):
     cursor = conn.cursor()
     sql = "select type from tb_record1 where vehicle_num = '{0}' and gps_date = '{1}'".format(veh, str_time)
@@ -553,10 +579,11 @@ def process(trace, area):
 def main_vehicle(conn, vehi_num):
     jq_area = get_area(conn)
     print vehi_num
-    mkdir("./pic/march/{0}".format(vehi_num))
+    mkdir("./pic/{0}".format(vehi_num))
     for d in range(20, 32):
         begin_time = datetime(2018, 3, d, 8, 0, 0)
         str_bt = begin_time.strftime('%Y-%m-%d')
+        print str_bt
         tp = get_type(conn, vehi_num, str_bt)
         if tp == 0:
             continue
@@ -564,18 +591,20 @@ def main_vehicle(conn, vehi_num):
         fig1 = plt.figure(figsize=(12, 6))
         ax = fig1.add_subplot(111)
         taxi_trace = get_dist(conn, begin_time, vehi_num)
-        # labels = get_area_label(taxi_trace, jq_area)
+        labels, X = get_label(taxi_trace)
         # ent = label_entropy(labels)
-        # get_cluster_centers(taxi_trace, labels)
-        str_title = './pic/march/{0}/'.format(vehi_num) + vehi_num + ' ' + str_bt + '.png'
+        key_areas = get_key_area(conn)
+        center_list = get_cluster_centers(taxi_trace, labels)
+        get_cluster_name(vehi_num, str_bt, center_list, key_areas)
+        str_title = './pic/{0}/'.format(vehi_num) + vehi_num + ' ' + str_bt + '.png'
         # per, gps_cnt = process(taxi_trace, jq_area)
         # stop_in, stop_out = get_stop_point(taxi_trace, jq_area)
         # tup = (vehi_num, gps_cnt, stop_in, stop_out, per, ent, str_bt)
         # print tup
 
-        draw(taxi_trace, vehi_num, str_bt)
-        plt.subplots_adjust(left=0.06, right=0.98, bottom=0.05, top=0.96)
-        plt.savefig(str_title, dpi=200)
+        # draw(taxi_trace, vehi_num, str_bt, labels, X)
+        # plt.subplots_adjust(left=0.06, right=0.98, bottom=0.05, top=0.96)
+        # plt.savefig(str_title, dpi=200)
         # plt.show()
         # trace_list = split_trace(taxi_trace, labels)
         # for trace in trace_list

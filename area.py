@@ -34,5 +34,15 @@ def main():
         print e.message
 
 
-main()
+def get_key_area(conn):
+    cursor = conn.cursor()
+    sql = "select px, py, address from TB_AREA t "
+    addr_list = []
+    cursor.execute(sql)
+    for item in cursor.fetchall():
+        px, py, address = item[0:3]
+        addr_list.append((px, py, address))
+    return addr_list
+
+
 
