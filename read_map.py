@@ -28,18 +28,18 @@ EDGE_LENGTH = 5
 NODE_EDGELIST = 2
 # conn = oracle_util.get_connection()
 
-color = ['r-', 'b-', 'g-', 'c-', 'm-', 'y-', 'c-', 'r-', 'b-', 'brown', 'm--', 'y--', 'c--', 'k--', 'r:']
+color = ['k-', 'k-', 'k-', 'k-', 'k-', 'k-', 'k-', 'k-', 'k-', 'brown', 'm--', 'y--', 'c--', 'k--', 'r:']
 # region = {'primary': 0, 'secondary': 1, 'tertiary': 2,
 #           'unclassified': 5, 'trunk': 3, 'service': 4, 'trunk_link': 6,
 #           'primary_link': 7, 'secondary_link': 8, 'residential': 9}
 region = {'primary': 0, 'secondary': 1, 'tertiary': 2, 'trunk': 3, 'unclassified': 5}
-plt_color = ['r--', 'b--', 'g--', 'k--', 'm--', 'c--']
+plt_color = ['r', 'b', 'g', 'gold', 'm', 'c']
 
 
 class TaxiData:
     def __init__(self, px, py, stime, state, speed):
         self.px, self.py, self.stime, self.state, self.speed = px, py, stime, state, speed
-        self.stop_index = 0
+        self.stop_index = -1
 
     def set_index(self, index):
         self.stop_index = index
@@ -52,6 +52,12 @@ def cmp1(data1, data2):
         return -1
     else:
         return 0
+
+
+def calc_ms(size):
+    ans = (math.log10(float(size) / 20) + 1) * 8
+    ans = max(8.0, ans)
+    return ans
 
 
 def draw_map(way, node, edge):
@@ -70,7 +76,7 @@ def draw_map(way, node, edge):
             c = color[region[pl['highway']]]
         except KeyError:
             continue
-        plt.plot(x, y, c, alpha=0.3)
+        plt.plot(x, y, c, alpha=0.1)
 
 
 def read_xml(filename):
@@ -131,6 +137,38 @@ def read_xml(filename):
     return way, node, edge
 
 
+def draw_traj(trace, i):
+    s0 = trace[0].stime.strftime('%H:%M')
+    s1 = trace[-1].stime.strftime('%H:%M')
+    trace_list = []
+    for data in trace:
+        trace_list.append([data.px, data.py])
+    x, y = zip(*trace_list)
+    plt.plot(x, y, plt_color[i % 6], marker='+', ls='--', alpha=0.75, ms=6)
+    # plt.text(trace[0].px, trace[0].py, s0)
+    # plt.text(trace[-1].px, trace[-1].py, s1)
+
+
+def draw_labels(x_dict, y_dict):
+    draw_colors = ['crimson', 'darkorange', 'gold', 'lawngreen', 'c', 'deepskyblue', 'violet']
+    markers = ['o', 'H']
+    xmean, ymean, sz = [], [], []
+    for n, x_list in x_dict.iteritems():
+        if n != -1:
+            vec = np.array(x_list)
+            x = np.mean(vec)
+            xmean.append(x)
+    for n, y_list in y_dict.iteritems():
+        if n != -1:
+            vec = np.array(y_list)
+            y = np.mean(vec)
+            ymean.append(y)
+            sz.append(len(y_list))
+    for n in x_dict:
+        if n != -1:
+            plt.plot(xmean[n], ymean[n], color=draw_colors[n % 7], marker=markers[(n / 7) % 2], ms=calc_ms(sz[n]))
+
+
 def draw(trace, vehi_num, str_time, labels, X):
     way, node, edge = read_xml('jq.xml')
     draw_map(way, node, edge)
@@ -157,18 +195,6 @@ def draw(trace, vehi_num, str_time, labels, X):
                 idx += 1
             last_point = cur_point
 
-    trace_len = len(all_list)
-    if trace_len == 0:
-        return
-    if trace_len > 2000:
-        alpha = 0.125
-    elif trace_len > 1000:
-        alpha = 0.25
-    else:
-        alpha = 0.5
-    x, y = zip(*all_list)
-    plt.plot(x, y, 'k', marker='+', ls='None', alpha=alpha, ms=4.5)
-
     if len(xy_list) == 0:
         return
     # x, y = zip(*xy_list)
@@ -185,14 +211,15 @@ def draw(trace, vehi_num, str_time, labels, X):
         x_dict[labels[i]].append(X[:, 0][i])
         y_dict[labels[i]].append(X[:, 1][i])
 
-    colors = ['ro', 'yo', 'co', 'go', 'mo', 'rs', 'ys', 'cs', 'gs', 'ms', 'ms', 'y*', 'cs', 'ks', 'r^', 'g^', 'k^', 'c^',
+    colors = ['ro', 'yo', 'co', 'go', 'mo', 'rp', 'yp', 'cp', 'gp', 'mp', 'ms', 'y*', 'cs', 'ks', 'r^', 'g^', 'k^', 'c^',
              'm^', 'b^', 'yd', 'r*', 'b*', 'g*', 'm*', 'c*', 'k*', 'y^', 'b+', 'g+', 'c+', 'm+', 'k+', 'rp',
              'bp', 'gp', 'cp', 'yp', 'mp', 'kp', 'rd', 'r+', 'gd', 'cd', 'ys', 'kd', 'md', 'bd', 'rx', 'bx', 'gx', 'cx',
              'mx', 'yx', 'kx', 'r>', 'b>', 'g>', 'y>', 'm>', 'c>', 'k>', 'y.', 'k+']
 
-    for n in x_dict:
-        if n != -1:
-            plt.plot(x_dict[n], y_dict[n], colors[n % 10])
+    draw_labels(x_dict, y_dict)
+    # for n in x_dict:
+    #     if n != -1:
+    #         plt.plot(x_dict[n], y_dict[n], colors[n % 10], markersize=8)
 
 
 def get_list_entropy(od_list, index_list):
@@ -252,47 +279,49 @@ def get_most(index_list):
 
 
 def split_trace(trace, labels):
-    stop_list = []
-    bi, ei = -1, -1
-    idx = 0
-    for data in trace:
-        if data.speed < 5:
-            if bi == -1:
-                bi = idx
-            ei = idx
-        else:
-            if bi != -1:
-                if ei - bi >= 5:
-                    stop_list.append([bi, ei])
-            bi = -1
-        idx += 1
+    """
+    通过计算得到的营运常驻点，对当日轨迹进行分隔
+    :param trace: list(Taxi_Data)
+    :param labels: dbscan label
+    :return: trace_list
+    """
+    if len(trace) == 0:
+        return
     trace_list = []
-    lasti, last_index = 0, 0
-    diary_index, od_index = [], []
-    for stop in stop_list:
-        bi, ei = stop[0], stop[1]
-        stop_indexes = []
-        for i in range(bi, ei + 1):
-            stop_indexes.append(labels[trace[i].stop_index])
-        cur_index = get_most(stop_indexes)
-        diary_index.append(cur_index)
-        if bi - lasti > 1:
-            trace_list.append([trace[lasti: bi], [last_index, cur_index]])
-            od_index.append([last_index, cur_index])
-        lasti = ei + 1
-        last_index = cur_index
-    # entropy = get_list_entropy(od_index, diary_index)
-    # print entropy
-    idx = 0
-    for trace, indexes in trace_list:
-        print idx, trace[0].stime, trace[-1].stime, len(trace), indexes[0], indexes[1]
-        idx += 1
+    stop_list, period_list = [], []
+    # step 1
+    # 提取stop点
+    for i, data in enumerate(trace):
+        if data.stop_index != -1:
+            l = labels[data.stop_index]
+            if l != -1:
+                stop_list.append([l, i])
+    # step 2
+    # 合并相近stop点，形成(label, begin_index, end_index)三元组stop list
+    last_l = -1
+    for item in stop_list:
+        l, i = item[:]
+        if l == last_l:     # merge
+            ei = i
+        else:               # change
+            if last_l != -1:
+                tup = (last_l, bi, ei)
+                period_list.append(tup)
+            bi, ei, last_l = i, i, l
+    period_list.append((last_l, bi, ei))
+    # step 3
+    # (trace_begin_index, trace_end_index)
+    for i, item in enumerate(period_list[1:]):
+        trace_list.append((period_list[i][2], item[1]))
+    for i, traj in enumerate(trace_list):
+        bi, ei = traj[:]
+        draw_traj(trace[bi:ei + 1], i)
     return trace_list
 
 
 def get_dist(conn, bt, vehi_num):
     str_bt = bt.strftime('%Y-%m-%d %H:%M:%S')
-    end_time = bt + timedelta(hours=12)
+    end_time = bt + timedelta(hours=10)
     str_et = end_time.strftime('%Y-%m-%d %H:%M:%S')
     sql = "select px, py, speed_time, state, speed from " \
           "TB_GPS_1803 t where speed_time >= to_date('{1}', 'yyyy-mm-dd hh24:mi:ss') " \
@@ -431,7 +460,7 @@ def get_cluster_centers(trace, label):
         px, py = sumx[key] / cnt[key], sumy[key] / cnt[key]
         lat, lng = xy2bl(px, py)
         # addr = geo2addr(lng, lat)
-        print key, lng, lat, cnt[key]
+        # print key, lng, lat, cnt[key]
         area_list.append((lng, lat))
     # save_area(area_list)
     return area_list
@@ -533,7 +562,7 @@ def get_cluster_name(veh, str_time, centers, areas):
     针对每一个cluster中心点计算最近的已知常驻营运地点
     :param centers: center list
     :param areas: area list [[px, py, address], ...]
-    :return: address list, 如没有临近1000米内的已知点，返回未知
+    :return: address list, 如没有临近500米内的已知点，返回未知
     """
     fp = open('area.txt', 'a')
     fp.write(veh + ',' + str_time + '\n')
@@ -585,28 +614,29 @@ def main_vehicle(conn, vehi_num):
         str_bt = begin_time.strftime('%Y-%m-%d')
         print str_bt
         tp = get_type(conn, vehi_num, str_bt)
-        if tp == 0:
-            continue
+        # if tp == 0:
+        #     continue
 
         fig1 = plt.figure(figsize=(12, 6))
         ax = fig1.add_subplot(111)
         taxi_trace = get_dist(conn, begin_time, vehi_num)
         labels, X = get_label(taxi_trace)
         # ent = label_entropy(labels)
-        key_areas = get_key_area(conn)
-        center_list = get_cluster_centers(taxi_trace, labels)
-        get_cluster_name(vehi_num, str_bt, center_list, key_areas)
+        # key_areas = get_key_area(conn)
+        # center_list = get_cluster_centers(taxi_trace, labels)
+        # get_cluster_name(vehi_num, str_bt, center_list, key_areas)
         str_title = './pic/{0}/'.format(vehi_num) + vehi_num + ' ' + str_bt + '.png'
+        trace_list = split_trace(taxi_trace, labels)
         # per, gps_cnt = process(taxi_trace, jq_area)
         # stop_in, stop_out = get_stop_point(taxi_trace, jq_area)
         # tup = (vehi_num, gps_cnt, stop_in, stop_out, per, ent, str_bt)
         # print tup
 
-        # draw(taxi_trace, vehi_num, str_bt, labels, X)
-        # plt.subplots_adjust(left=0.06, right=0.98, bottom=0.05, top=0.96)
-        # plt.savefig(str_title, dpi=200)
+        draw(taxi_trace, vehi_num, str_bt, labels, X)
+        plt.subplots_adjust(left=0.06, right=0.98, bottom=0.05, top=0.96)
+        plt.savefig(str_title, dpi=200)
         # plt.show()
-        # trace_list = split_trace(taxi_trace, labels)
+
         # for trace in trace_list
         # draw_trace_list(trace_list, 14, 14)
         plt.close(fig1)

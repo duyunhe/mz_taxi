@@ -44,18 +44,22 @@ def query():
     return ab_list
 
 
-def savepng():
+def save_png():
     ab_list = ['AT9344', 'AT1385', 'ATE559', 'ATG185', 'AT5310',
                'ATD792', 'ATD669', 'AT9966', 'ATB533', 'ATB541',
                'ATD105', 'ATF286', 'ATF288', 'ATF299', 'ATF358',
                'AQT371', 'AT9501', 'ATA879', 'ATA888', 'ATC709',
                'ATE027', 'ATE077', 'AT8884', 'ATD326', 'ATD560',
                'ATD565', 'ATD568', 'ATD581', 'ATE792', 'ATF266']
-    # ab_list = ['AT9501']
+    # ab_list = ['AT9344']
     # ab_list = query()
-    conn = oracle_util.get_connection()
+    try:
+        conn = oracle_util.get_connection()
+    except Exception as e:
+        print e.message
+        return
     for veh in ab_list:
         main_vehicle(conn, veh)
 
 
-savepng()
+save_png()
