@@ -12,9 +12,13 @@ import numpy as np
 import time
 
 
-def get_vehicle(conn):
+def get_vehicle(conn, mark):
+    print mark
     cursor = conn.cursor()
-    sql = "select vehicle_num from tb_vehicle where mark <= 4000 and mark > 500"
+    if mark != -1:
+        sql = "select vehicle_num from tb_vehicle where mark = '{0}'".format(mark)
+    else:
+        sql = "select vehicle_num from tb_vehicle"
     cursor.execute(sql)
     veh_set = set()
     for item in cursor.fetchall():
@@ -63,9 +67,8 @@ def load_from_txt():
 def main():
     conn = oracle_util.get_connection()
     jq_area = get_area(conn)
-
-    # ab_list = get_vehicle(conn)
-    ab_list = ['ATC402']
+    ab_list = get_vehicle(conn, 4)
+    # ab_list = ['ATC402']
     # print len(ab_list)
     weights = load_model('model.txt')
 
@@ -74,19 +77,19 @@ def main():
     for veh in ab_list:
         tup_list = []
         cnt += 1
-        if cnt % 5 == 0:
+        if cnt % 10 == 0:
             print cnt
-        for d in range(25, 27):
+        for d in range(1, 20):
             begin_time = datetime(2018, 3, d, 8, 0, 0)
             str_bt = begin_time.strftime('%Y-%m-%d')
             taxi_trace = get_dist(conn, begin_time, veh)
             per, gps_cnt = process(taxi_trace, jq_area)
             if gps_cnt > 360:
-                stop_in, stop_out = get_stop_point(taxi_trace, jq_area)
-                labels = get_area_label(taxi_trace, jq_area)
+                stop_in, stop_out, labels, X = get_stop_point(taxi_trace, jq_area)
+                # labels, X = get_area_label(taxi_trace, jq_area)
                 ent = label_entropy(labels)
                 tup = (veh, gps_cnt, stop_in, stop_out, per, ent, str_bt)
-                print tup
+                # print tup
                 tup_list.append(tup)
         mz_flag = 0
         if len(tup_list) > 0:
@@ -98,11 +101,11 @@ def main():
                 if ans[i][0] == 1.0:
                     print tup_list[i]
                     mz_flag = 1
-                tup = tup_list[i] + (int(ans[i][0]),)
-                ans_list.append(tup)
-        # if mz_flag:
-        #     save_record(conn, ans_list)
-        main_vehicle(conn, ab_list[0])
+                    tup = tup_list[i] + (int(ans[i][0]),)
+                    ans_list.append(tup)
+        if mz_flag:
+            save_record(conn, ans_list)
+        # main_vehicle(conn, ab_list[0])
     et = time.clock()
     print et - bt
     conn.close()

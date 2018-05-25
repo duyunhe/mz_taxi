@@ -11,6 +11,7 @@ from geo import bl2xy, xy2bl, calc_dist
 from DBConn import oracle_util
 import numpy as np
 import math
+import sys
 from area import get_key_area
 from time import clock
 from datetime import datetime, timedelta
@@ -320,6 +321,7 @@ def split_trace(trace, labels):
 
 
 def get_dist(conn, bt, vehi_num):
+    _bt = clock()
     str_bt = bt.strftime('%Y-%m-%d %H:%M:%S')
     end_time = bt + timedelta(hours=10)
     str_et = end_time.strftime('%Y-%m-%d %H:%M:%S')
@@ -344,6 +346,8 @@ def get_dist(conn, bt, vehi_num):
             trace.append(taxi_data)
     # print len(trace)
     trace.sort(cmp1)
+    _et = clock()
+    # print 'step1', _et - _bt
 
     new_trace = []
     for data in trace:
@@ -353,13 +357,15 @@ def get_dist(conn, bt, vehi_num):
             del_time = (cur_point.stime - last_point.stime).total_seconds()
             if dist > 2000 and del_time < 60:
                 continue
-            elif del_time < 5:
+            elif del_time <= 5:
                 continue
             else:
                 new_trace.append(data)
         else:
             new_trace.append(data)
         last_point = cur_point
+    _et = clock()
+    # print sys._getframe().f_code.co_name, _et - _bt
     return new_trace
 
 
@@ -404,6 +410,7 @@ def label_entropy(label):
 
 
 def get_area_label(trace, area):
+    bt = clock()
     xy_list = []
     for data in trace:
         if data.speed < 5:
@@ -412,10 +419,13 @@ def get_area_label(trace, area):
     if len(X) == 0:
         return None, X
     db = DBSCAN(eps=50, min_samples=15).fit(X)
+    et = clock()
+    # print sys._getframe().f_code.co_name, et - bt
     return db.labels_, X
 
 
 def get_label(trace):
+    _bt = clock()
     xy_list = []
     idx = 0
     for data in trace:
@@ -427,6 +437,8 @@ def get_label(trace):
     if len(xy_list) == 0:
         return None, X
     db = DBSCAN(eps=50, min_samples=15).fit(X)
+    _et = clock()
+    # print sys._getframe().f_code.co_name, _et - _bt
     return db.labels_, X
 
 
@@ -514,7 +526,8 @@ def draw_trace_list(trace_list, bi, ei):
 
 
 def get_stop_point(trace, area):
-    label = get_label(trace)
+    _bt = clock()
+    label, X = get_label(trace)
     sumx, sumy = {}, {}
     cnt = {}
     if label is None:
@@ -540,7 +553,9 @@ def get_stop_point(trace, area):
         else:
             cnt_out += 1
     # print cnt_in, cnt_out,
-    return cnt_in, cnt_out
+    _et = clock()
+    # print sys._getframe().f_code.co_name, _et - _bt
+    return cnt_in, cnt_out, label, X
 
 
 def get_area(conn):
