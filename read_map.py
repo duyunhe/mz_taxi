@@ -138,6 +138,20 @@ def read_xml(filename):
     return way, node, edge
 
 
+def draw_traj2(trace, i):
+    s0 = trace[0].stime.strftime('%H:%M')
+    s1 = trace[-1].stime.strftime('%H:%M')
+    plt.plot(trace[0].px, trace[0].py, color='r', marker='o', ms=8)
+    plt.text(trace[0].px + 50, trace[0].py + 50, str(1))
+    plt.plot(trace[-1].px, trace[-1].py, color='g', marker='o', ms=8)
+    plt.text(trace[-1].px + 50, trace[-1].py + 50, str(1))
+    trace_list = []
+    for data in trace:
+        trace_list.append([data.px, data.py])
+    x, y = zip(*trace_list)
+    plt.plot(x, y, color='k', marker='None', ls='-', linewidth=2, alpha=1, ms=6)
+
+
 def draw_traj(trace, i):
     s0 = trace[0].stime.strftime('%H:%M')
     s1 = trace[-1].stime.strftime('%H:%M')
@@ -279,6 +293,32 @@ def get_most(index_list):
     return max_key
 
 
+def split_stop(trace):
+    return
+
+
+def split_service(trace):
+    trace_list = []
+    last_state = -1
+    bi, ei = -1, -1
+    for i, data in enumerate(trace):
+        state = data.state
+        if state != last_state:
+            if state == 0:          # 重车结束
+                load_len = ei - bi + 1
+                if load_len >= 2:   # 跳重车干扰
+                    trace_list.append([bi, ei])
+            else:      # 新的重车开始
+                bi = i
+        else:
+            ei = i
+        last_state = state
+    for i, traj in enumerate(trace_list):
+        bi, ei = traj[:]
+        draw_traj2(trace[bi:ei + 1], i)
+    return trace_list
+
+
 def split_trace(trace, labels):
     """
     通过计算得到的营运常驻点，对当日轨迹进行分隔
@@ -292,11 +332,17 @@ def split_trace(trace, labels):
     stop_list, period_list = [], []
     # step 1
     # 提取stop点
+    ecnt, fcnt = 0, 0
     for i, data in enumerate(trace):
+        if data.state == 1:
+            fcnt += 1
+        else:
+            ecnt += 1
         if data.stop_index != -1:
             l = labels[data.stop_index]
             if l != -1:
                 stop_list.append([l, i])
+    print ecnt, fcnt
     # step 2
     # 合并相近stop点，形成(label, begin_index, end_index)三元组stop list
     last_l = -1
@@ -309,11 +355,21 @@ def split_trace(trace, labels):
                 tup = (last_l, bi, ei)
                 period_list.append(tup)
             bi, ei, last_l = i, i, l
-    period_list.append((last_l, bi, ei))
+    try:
+        period_list.append((last_l, bi, ei))
+    except UnboundLocalError:
+        pass
     # step 3
     # (trace_begin_index, trace_end_index)
     for i, item in enumerate(period_list[1:]):
-        trace_list.append((period_list[i][2], item[1]))
+        bi, ei = period_list[i][2], item[1]
+        flag = 0
+        for data in trace[bi:ei + 1]:
+            if data.state == 1:
+                flag = 1
+        if flag == 0:
+            if ei - bi >= 20:
+                trace_list.append((period_list[i][2], item[1]))
     for i, traj in enumerate(trace_list):
         bi, ei = traj[:]
         draw_traj(trace[bi:ei + 1], i)
@@ -321,12 +377,11 @@ def split_trace(trace, labels):
 
 
 def get_dist(conn, bt, vehi_num):
-    _bt = clock()
     str_bt = bt.strftime('%Y-%m-%d %H:%M:%S')
     end_time = bt + timedelta(hours=10)
     str_et = end_time.strftime('%Y-%m-%d %H:%M:%S')
     sql = "select px, py, speed_time, state, speed from " \
-          "TB_GPS_1803 t where speed_time >= to_date('{1}', 'yyyy-mm-dd hh24:mi:ss') " \
+          "TB_GPS_1805 t where speed_time >= to_date('{1}', 'yyyy-mm-dd hh24:mi:ss') " \
           "and speed_time < to_date('{2}', 'yyyy-MM-dd hh24:mi:ss')" \
           " and vehicle_num = '浙{0}'".format(vehi_num, str_bt, str_et)
 
@@ -346,9 +401,6 @@ def get_dist(conn, bt, vehi_num):
             trace.append(taxi_data)
     # print len(trace)
     trace.sort(cmp1)
-    _et = clock()
-    # print 'step1', _et - _bt
-
     new_trace = []
     for data in trace:
         cur_point = data
@@ -364,8 +416,6 @@ def get_dist(conn, bt, vehi_num):
         else:
             new_trace.append(data)
         last_point = cur_point
-    _et = clock()
-    # print sys._getframe().f_code.co_name, _et - _bt
     return new_trace
 
 
@@ -410,7 +460,6 @@ def label_entropy(label):
 
 
 def get_area_label(trace, area):
-    bt = clock()
     xy_list = []
     for data in trace:
         if data.speed < 5:
@@ -419,13 +468,10 @@ def get_area_label(trace, area):
     if len(X) == 0:
         return None, X
     db = DBSCAN(eps=50, min_samples=15).fit(X)
-    et = clock()
-    # print sys._getframe().f_code.co_name, et - bt
     return db.labels_, X
 
 
 def get_label(trace):
-    _bt = clock()
     xy_list = []
     idx = 0
     for data in trace:
@@ -437,8 +483,6 @@ def get_label(trace):
     if len(xy_list) == 0:
         return None, X
     db = DBSCAN(eps=50, min_samples=15).fit(X)
-    _et = clock()
-    # print sys._getframe().f_code.co_name, _et - _bt
     return db.labels_, X
 
 
@@ -526,7 +570,6 @@ def draw_trace_list(trace_list, bi, ei):
 
 
 def get_stop_point(trace, area):
-    _bt = clock()
     label, X = get_label(trace)
     sumx, sumy = {}, {}
     cnt = {}
@@ -552,9 +595,6 @@ def get_stop_point(trace, area):
             cnt_in += 1
         else:
             cnt_out += 1
-    # print cnt_in, cnt_out,
-    _et = clock()
-    # print sys._getframe().f_code.co_name, _et - _bt
     return cnt_in, cnt_out, label, X
 
 
@@ -624,13 +664,13 @@ def main_vehicle(conn, vehi_num):
     jq_area = get_area(conn)
     print vehi_num
     mkdir("./pic/{0}".format(vehi_num))
-    for d in range(20, 32):
+    for d in range(1, 32):
         begin_time = datetime(2018, 3, d, 8, 0, 0)
         str_bt = begin_time.strftime('%Y-%m-%d')
         print str_bt
         tp = get_type(conn, vehi_num, str_bt)
-        # if tp == 0:
-        #     continue
+        if tp == 0:
+            continue
 
         fig1 = plt.figure(figsize=(12, 6))
         ax = fig1.add_subplot(111)
@@ -641,17 +681,20 @@ def main_vehicle(conn, vehi_num):
         # center_list = get_cluster_centers(taxi_trace, labels)
         # get_cluster_name(vehi_num, str_bt, center_list, key_areas)
         str_title = './pic/{0}/'.format(vehi_num) + vehi_num + ' ' + str_bt + '.png'
+        service_list = split_service(taxi_trace)
         trace_list = split_trace(taxi_trace, labels)
+        for s in service_list:
+            print s, s[1] - s[0]
+        for t in trace_list:
+            print t
         # per, gps_cnt = process(taxi_trace, jq_area)
         # stop_in, stop_out = get_stop_point(taxi_trace, jq_area)
         # tup = (vehi_num, gps_cnt, stop_in, stop_out, per, ent, str_bt)
         # print tup
-
         draw(taxi_trace, vehi_num, str_bt, labels, X)
         plt.subplots_adjust(left=0.06, right=0.98, bottom=0.05, top=0.96)
         plt.savefig(str_title, dpi=200)
-        # plt.show()
-
+        plt.show()
         # for trace in trace_list
         # draw_trace_list(trace_list, 14, 14)
         plt.close(fig1)

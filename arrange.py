@@ -5,6 +5,7 @@
 # @File    : arrange.py
 
 
+import cx_Oracle
 from DBConn import oracle_util
 from read_map import main_vehicle
 
@@ -27,39 +28,42 @@ def delete():
     conn.commit()
 
 
-def query():
+def query(mark):
     ab_list = []
-    conn = oracle_util.get_connection()
-    sql = "select count(*), vehicle_num from tb_record1 group by vehicle_num"
+    conn = cx_Oracle.connect("lishui", "lishui", "192.168.11.88/orcl")
+    sql = "select count(*), vehicle_num from tb_record1 where gps_date < '2018-03-20' group by vehicle_num "
     cursor = conn.cursor()
     cursor.execute(sql)
-    tot = 0
+    # flag = 0
     for items in cursor.fetchall():
         cnt, veh = items[0:2]
+        ldig = int(ord(veh[-1]) - ord('0'))
+        if ldig != mark:
+            continue
         if cnt >= 4:
             print veh, cnt
-            tot += 1
             ab_list.append(veh)
-    print tot
+    cursor.close()
+    conn.close()
     return ab_list
 
 
 def save_png():
-    ab_list = ['AT9344', 'AT1385', 'ATE559', 'ATG185', 'AT5310',
-               'ATD792', 'ATD669', 'AT9966', 'ATB533', 'ATB541',
-               'ATD105', 'ATF286', 'ATF288', 'ATF299', 'ATF358',
-               'AQT371', 'AT9501', 'ATA879', 'ATA888', 'ATC709',
-               'ATE027', 'ATE077', 'AT8884', 'ATD326', 'ATD560',
-               'ATD565', 'ATD568', 'ATD581', 'ATE792', 'ATF266']
-    # ab_list = ['AT9344']
-    # ab_list = query()
+    # ab_list = ['AT9344', 'AT1385', 'ATE559', 'ATG185', 'AT5310',
+    #            'ATD792', 'ATD669', 'AT9966', 'ATB533', 'ATB541',
+    #            'ATD105', 'ATF286', 'ATF288', 'ATF299', 'ATF358',
+    #            'AQT371', 'AT9501', 'ATA879', 'ATA888', 'ATC709',
+    #            'ATE027', 'ATE077', 'AT8884', 'ATD326', 'ATD560',
+    #            'ATD565', 'ATD568', 'ATD581', 'ATE792', 'ATF266']
+    ab_list = ['ATG185']
+    # ab_list = query(8)
     try:
-        conn = oracle_util.get_connection()
+        conn = cx_Oracle.connect("lishui", "lishui", "192.168.11.88/orcl")
     except Exception as e:
         print e.message
         return
     for veh in ab_list:
         main_vehicle(conn, veh)
-
+    conn.close()
 
 save_png()

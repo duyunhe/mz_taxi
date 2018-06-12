@@ -67,7 +67,7 @@ def load_from_txt():
 def main():
     conn = oracle_util.get_connection()
     jq_area = get_area(conn)
-    ab_list = get_vehicle(conn, 4)
+    ab_list = get_vehicle(conn, -1)
     # ab_list = ['ATC402']
     # print len(ab_list)
     weights = load_model('model.txt')
@@ -79,8 +79,8 @@ def main():
         cnt += 1
         if cnt % 10 == 0:
             print cnt
-        for d in range(1, 20):
-            begin_time = datetime(2018, 3, d, 8, 0, 0)
+        for d in range(1, 32):
+            begin_time = datetime(2018, 5, d, 8, 0, 0)
             str_bt = begin_time.strftime('%Y-%m-%d')
             taxi_trace = get_dist(conn, begin_time, veh)
             per, gps_cnt = process(taxi_trace, jq_area)
