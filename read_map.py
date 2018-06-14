@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from sklearn.cluster import DBSCAN
 from xml.etree import ElementTree as ET
 from geo import bl2xy, xy2bl, calc_dist
-from DBConn import oracle_util
+# from DBConn import oracle_util
 import numpy as np
 import math
 import sys
@@ -531,9 +531,9 @@ def draw_data(trace):
             # plt.text(data.px, data.py, '{0}'.format(data.direction))
         xy_list.append([data.px, data.py])
     x, y = zip(*xy_list)
-    plt.plot(x, y, 'k--')
+    # plt.plot(x, y, 'b+')
     x, y = zip(*stop_list)
-    plt.scatter(x, y, c='b')
+    plt.plot(x, y, 'k+')
 
 
 def draw_trace(trace, i):
@@ -574,7 +574,7 @@ def get_stop_point(trace, area):
     sumx, sumy = {}, {}
     cnt = {}
     if label is None:
-        return 0, 0
+        return 0, 0, label, X
     n = len(label)
     for data in trace:
         if data.speed < 5:
@@ -699,6 +699,11 @@ def main_vehicle(conn, vehi_num):
         # draw_trace_list(trace_list, 14, 14)
         plt.close(fig1)
     print 'over'
+
+
+def show_map():
+    way, node, edge = read_xml('jq0.xml')
+    draw_map(way, node, edge)
 
 
 def main():

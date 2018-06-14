@@ -33,7 +33,7 @@ def get_vehicle(conn, mark):
 
 def save_record(conn, tup_list):
     cursor = conn.cursor()
-    sql = "insert into tb_record1 (vehicle_num, gps_count, stop_in_count, " \
+    sql = "insert into tb_record (vehicle_num, gps_count, stop_in_count, " \
           "stop_out_count, gps_in_per, stop_in_entropy, gps_date, type) values(:1, :2, :3, :4, :5, :6, :7, :8)"
     cursor.executemany(sql, tup_list)
     conn.commit()
@@ -110,4 +110,4 @@ def main():
     print et - bt
     conn.close()
 
-main()
+# main()

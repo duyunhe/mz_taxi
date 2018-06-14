@@ -4,7 +4,7 @@
 # @简介    : 预处理轨迹
 # @File    : pre.py
 
-from DBConn import oracle_util
+# from DBConn import oracle_util
 from datetime import datetime, timedelta
 from geo import bl2xy, calc_dist
 from time import clock
