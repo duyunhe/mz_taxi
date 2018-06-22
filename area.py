@@ -3,6 +3,7 @@
 # @Author  : 
 # @简介    : insert key areas collected from gps center manually
 # @File    : area.py
+
 import os
 from DBConn import oracle_util
 import numpy as np
@@ -36,9 +37,13 @@ def main():
         print e.message
 
 
+def get_poi(lng, lat):
+    return ""
+
+
 def get_key_area(conn):
     cursor = conn.cursor()
-    sql = "select px, py, address from TB_AREA t "
+    sql = "select px, py, address from TB_AREA t order by area_id"
     addr_list = []
     cursor.execute(sql)
     for item in cursor.fetchall():

@@ -29,7 +29,7 @@ EDGE_LENGTH = 5
 NODE_EDGELIST = 2
 # conn = oracle_util.get_connection()
 
-color = ['k-', 'k-', 'k-', 'k-', 'k-', 'k-', 'k-', 'k-', 'k-', 'brown', 'm--', 'y--', 'c--', 'k--', 'r:']
+color = ['b-', 'b-', 'b-', 'b-', 'b-', 'b-', 'b-', 'k-', 'k-', 'brown', 'm--', 'y--', 'c--', 'k--', 'r:']
 # region = {'primary': 0, 'secondary': 1, 'tertiary': 2,
 #           'unclassified': 5, 'trunk': 3, 'service': 4, 'trunk_link': 6,
 #           'primary_link': 7, 'secondary_link': 8, 'residential': 9}
@@ -182,6 +182,8 @@ def draw_labels(x_dict, y_dict):
     for n in x_dict:
         if n != -1:
             plt.plot(xmean[n], ymean[n], color=draw_colors[n % 7], marker=markers[(n / 7) % 2], ms=calc_ms(sz[n]))
+    center_points = zip(xmean, ymean)
+    return center_points
 
 
 def draw(trace, vehi_num, str_time, labels, X):

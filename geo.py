@@ -57,6 +57,19 @@ def calc_dist(pt0, pt1):
     return dist
 
 
+def calc_bl_dist(pt0, pt1):
+    """
+    计算经纬度距离
+    :param pt0: [lng, lat]
+    :param pt1: [lng, lat]
+    :return: 
+    """
+    x0, y0 = bl2xy(pt0[1], pt0[0])
+    x1, y1 = bl2xy(pt1[1], pt1[0])
+    dist = calc_dist([x0, y0], [x1, y1])
+    return dist
+
+
 def calc_included_angle(s0p0, s0p1, s1p0, s1p1):
     """
     计算夹角
@@ -168,3 +181,7 @@ def draw_raw(traj, ax):
         ylist.append(point.py)
     ax.plot(xlist, ylist, marker='o', linestyle='--', color='k', lw=1)
 
+
+pt0 = [120.125885,30.264377]
+pt1 = [120.117956,30.256945]
+dist = calc_bl_dist(pt0, pt1)
