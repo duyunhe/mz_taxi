@@ -39,7 +39,10 @@ def select(mark):
     for veh in sorted_cnt:
         if veh_cnt[veh] > 4:
             valid_list.append(veh)
-    return valid_list[mark::5]
+    if mark == -1:
+        return valid_list
+    else:
+        return valid_list[mark::5]
 
 
 def save2db(veh_num, area_list, ep_dict, cnt_dict):
@@ -77,6 +80,10 @@ def save_csv_context(veh_num, area_list, ep_dict, cnt_dict):
 
 
 def main(mark):
+    """
+    :param mark: 当mark=-1时，查询所有车辆，否则查询部分车辆，详见select函数
+    :return: 
+    """
     print mark
     taxi_list = select(mark)
     save_csv_header()
@@ -442,5 +449,6 @@ def check_veh(vehi_num):
     plt.savefig(str_file, dpi=200)
     # plt.show()
     plt.close(fig1)
+
 
 main(g_mark)

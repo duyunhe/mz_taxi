@@ -8,7 +8,6 @@ import cx_Oracle
 import time
 from geo import bl2xy, calc_dist
 from read_map import show_map, draw_data, get_area, process, get_stop_point, label_entropy
-import matplotlib.pyplot as plt
 from datetime import datetime
 import numpy as np
 from logistic_regression import predict, load_model
@@ -35,7 +34,6 @@ def cmp1(data1, data2):
 
 def split_into_cars(data_list):
     """
-    to save memory, instead of one taxi_trace_dict
     :param data_list: vehicle num, px, py, state, stime
     :return: taxi_trace_map
     """
