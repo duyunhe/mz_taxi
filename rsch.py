@@ -6,6 +6,7 @@
 
 from DBConn import oracle_util
 import os
+from datetime import datetime, timedelta
 os.environ['NLS_LANG'] = 'SIMPLIFIED CHINESE_CHINA.ZHS16GBK'
 
 conn = oracle_util.get_connection()
@@ -49,6 +50,7 @@ def get_normal():
         normal_set.add(veh)
     return normal_set
 
+
 def get_abnormal():
     """
     确切的模子车辆
@@ -68,7 +70,7 @@ def get_abnormal():
     cnt = 0
     for veh, value in veh_cnt.iteritems():
         if value > 20:
-            print veh, value
+            # print veh, value
             cnt += 1
             abnormal_set.add(veh)
     print cnt
@@ -86,34 +88,69 @@ def get_record(veh):
     return date_list
 
 
-def get_gps_cnt(veh, date):
-    sql = "select map_row, map_col, cnt from tb_gps_cnt where vehicle_num = '{0}' and dbtime" \
-          " = to_date('{1}', 'yyyy-mm-dd')".format(veh, date)
+def get_gps_cnt(veh):
+    sql = "select map_row, map_col, cnt, dbtime from tb_gps_cnt where vehicle_num = '{0}'".format(veh)
     cursor = conn.cursor()
     cursor.execute(sql)
-    gps_cnt = [0] * 64
+    gps_cnt_map = {}
     for item in cursor:
         row, col, cnt = map(int, item[0:3])
+        gps_date = item[3].strftime('%Y-%m-%d')
         if row == -1 and col == -1:
             rid = 63
         else:
             rid = row * 7 + col
-        gps_cnt[rid] = cnt
-    gps_cnt_sum = sum(gps_cnt)
-    if gps_cnt_sum == 0:
-        return gps_cnt[:-1]
-    for i in range(64):
-        gps_cnt[i] = float(gps_cnt[i]) / gps_cnt_sum
-    return gps_cnt[:-1]
+        try:
+            gps_cnt_map[gps_date][rid] = cnt
+        except KeyError:
+            gps_cnt_map[gps_date] = [0] * 64
+            gps_cnt_map[gps_date][rid] = cnt
+
+    for date, gps_cnt in gps_cnt_map.iteritems():
+        gps_cnt_sum = sum(gps_cnt)
+        if gps_cnt_sum == 0:
+            continue
+        for i in range(64):
+            gps_cnt[i] = float(gps_cnt[i]) / gps_cnt_sum
+    return gps_cnt_map
 
 
-def main():
+def get_abnormal_table():
     mz_set = get_abnormal()
+    table_list = []
     for veh in mz_set:
+        print veh
         mz_date_list = get_record(veh)
+        mz_gps_map = get_gps_cnt(veh)
         for date in mz_date_list:
-            gps_area_cnt = get_gps_cnt(veh, date)
-            flag = 0
+            gps_cnt_table = mz_gps_map[date]
+            table_list.append(gps_cnt_table)
+    return table_list
 
 
-get_normal()
+def get_date_list(month):
+    bt = datetime(2018, month, 1)
+    date_list = []
+    et = datetime(2018, month + 1, 1)
+    while bt < et:
+        date_list.append(bt.strftime('%Y-%m-%d'))
+        bt += timedelta(days=1)
+    return date_list
+
+
+def get_normal_table():
+    normal_set = get_normal()
+    table_list = []
+    for veh in normal_set:
+        print veh
+        date_list = get_date_list(5)
+        gps_map = get_gps_cnt(veh)
+        if gps_map is None:
+            continue
+        for date in date_list:
+            gps_cnt_table = gps_map[date]
+            table_list.append(gps_cnt_table)
+    return table_list
+
+
+get_normal_table()
