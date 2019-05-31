@@ -181,7 +181,7 @@ def draw_raw(traj, ax):
         ylist.append(point.py)
     ax.plot(xlist, ylist, marker='o', linestyle='--', color='k', lw=1)
 
-
-pt0 = [120.125885,30.264377]
-pt1 = [120.117956,30.256945]
-dist = calc_bl_dist(pt0, pt1)
+#
+# pt0 = [120.125885,30.264377]
+# pt1 = [120.117956,30.256945]
+# dist = calc_bl_dist(pt0, pt1)
