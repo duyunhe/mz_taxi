@@ -19,7 +19,6 @@ import os
 from matplotlib.path import Path
 from pre import get_data, get_vehicle_mark
 
-
 os.environ['NLS_LANG'] = 'SIMPLIFIED CHINESE_CHINA.AL32UTF8'
 
 EDGE_ONEWAY = 3
@@ -38,9 +37,10 @@ plt_color = ['r', 'b', 'g', 'gold', 'm', 'c']
 
 
 class TaxiData:
-    def __init__(self, px, py, stime, state, speed):
+    def __init__(self, veh, px, py, stime, state, speed):
         self.px, self.py, self.stime, self.state, self.speed = px, py, stime, state, speed
         self.stop_index = -1
+        self.veh = veh
 
     def set_index(self, index):
         self.stop_index = index
@@ -67,7 +67,7 @@ def draw_map(way, node, edge):
         segid = []
         t = edge[pl['edge'][0]][0]
         segid.append(t)
-        for e in pl['edge']:       # e: index
+        for e in pl['edge']:  # e: index
             segid.append(edge[e][1])
         x, y = [], []
         for idx in segid:
@@ -228,10 +228,10 @@ def draw(trace, vehi_num, str_time, labels, X):
         x_dict[labels[i]].append(X[:, 0][i])
         y_dict[labels[i]].append(X[:, 1][i])
 
-    colors = ['ro', 'yo', 'co', 'go', 'mo', 'rp', 'yp', 'cp', 'gp', 'mp', 'ms', 'y*', 'cs', 'ks', 'r^', 'g^', 'k^', 'c^',
-             'm^', 'b^', 'yd', 'r*', 'b*', 'g*', 'm*', 'c*', 'k*', 'y^', 'b+', 'g+', 'c+', 'm+', 'k+', 'rp',
-             'bp', 'gp', 'cp', 'yp', 'mp', 'kp', 'rd', 'r+', 'gd', 'cd', 'ys', 'kd', 'md', 'bd', 'rx', 'bx', 'gx', 'cx',
-             'mx', 'yx', 'kx', 'r>', 'b>', 'g>', 'y>', 'm>', 'c>', 'k>', 'y.', 'k+']
+    colors = ['ro', 'yo', 'co', 'go', 'mo', 'rp', 'yp', 'cp', 'gp', 'mp', 'ms', 'y*', 'cs', 'ks', 'r^', 'g^', 'k^',
+              'c^', 'm^', 'b^', 'yd', 'r*', 'b*', 'g*', 'm*', 'c*', 'k*', 'y^', 'b+', 'g+', 'c+', 'm+', 'k+', 'rp',
+              'bp', 'gp', 'cp', 'yp', 'mp', 'kp', 'rd', 'r+', 'gd', 'cd', 'ys', 'kd', 'md', 'bd', 'rx', 'bx', 'gx',
+              'cx', 'mx', 'yx', 'kx', 'r>', 'b>', 'g>', 'y>', 'm>', 'c>', 'k>', 'y.', 'k+']
 
     draw_labels(x_dict, y_dict)
     # for n in x_dict:
@@ -306,11 +306,11 @@ def split_service(trace):
     for i, data in enumerate(trace):
         state = data.state
         if state != last_state:
-            if state == 0:          # 重车结束
+            if state == 0:  # 重车结束
                 load_len = ei - bi + 1
-                if load_len >= 2:   # 跳重车干扰
+                if load_len >= 2:  # 跳重车干扰
                     trace_list.append([bi, ei])
-            else:      # 新的重车开始
+            else:  # 新的重车开始
                 bi = i
         else:
             ei = i
@@ -350,9 +350,9 @@ def split_trace(trace, labels):
     last_l = -1
     for item in stop_list:
         l, i = item[:]
-        if l == last_l:     # merge
+        if l == last_l:  # merge
             ei = i
-        else:               # change
+        else:  # change
             if last_l != -1:
                 tup = (last_l, bi, ei)
                 period_list.append(tup)

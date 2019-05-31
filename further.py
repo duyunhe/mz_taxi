@@ -9,13 +9,13 @@ from area import get_key_area
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-from read_map import TaxiData, cmp1, show_map, draw_data, draw_labels
+from read_map import TaxiData, cmp1, draw_labels
 from geo import bl2xy, calc_dist, xy2bl, calc_bl_dist
 from sklearn.cluster import DBSCAN
 import time
 import urllib2
 import json
-os.environ['NLS_LANG'] = 'SIMPLIFIED CHINESE_CHINA.ZHS16GBK'
+os.environ['NLS_LANG'] = 'SIMPLIFIED CHINESE_CHINA.UTF8'
 conn = oracle_util.get_connection()
 g_mark = 4
 
@@ -51,7 +51,7 @@ def save2db(veh_num, area_list, ep_dict, cnt_dict):
 
 
 def save_csv_header():
-    fp = open("./data/mz.csv", 'w')
+    fp = open("E:/mzc/data/mz.csv", 'w')
     str_list = ["车辆", "常驻营运地点"]
     for i in range(1, 32):
         str_list.append("5-" + str(i))
@@ -61,22 +61,36 @@ def save_csv_header():
 
 
 def save_csv_context(veh_num, area_list, ep_dict, cnt_dict):
-    fp = open("./data/mz{0}.csv".format(g_mark), 'a')
-    slist = [veh_num.decode('gbk')]
+    fp = open("./data/mz{0}.csv".format(g_mark), 'w')
+    slist = [veh_num]
     sa = "\"" + '\n'.join(area_list) + "\""
     # sa = sa.encode('gbk')
     slist.append(sa)
     for d in range(1, 32):
         if cnt_dict[d] == 0:
-            slist.append(u"无数据")
+            slist.append("无数据")
         elif len(ep_dict[d]) == 0:
-            slist.append(u"正常营运")
+            slist.append("正常营运")
         else:
             sa = "\"" + '\n'.join(ep_dict[d]) + "\""
             slist.append(sa)
-    str_context = ','.join(slist).encode('utf-8')
+    str_context = ','.join(slist)
     fp.write(str_context + '\n')
     fp.close()
+
+
+def west_lake():
+    """
+    西湖新能源
+    :return: 
+    """
+    taxi_list = ['浙ATE077']
+    save_csv_header()
+    for taxi in taxi_list:
+        try:
+            check_veh(taxi)
+        except Exception as e:
+            print e.message
 
 
 def main(mark):
@@ -257,8 +271,8 @@ def test_draw(trace, sp_list):
         ax = fig1.add_subplot(111)
         plt.xlim(73126, 85276)
         plt.ylim(75749, 82509)
-        show_map()
-        draw_data(trace[bi:ei + 1])
+        # show_map()
+        # draw_data(trace[bi:ei + 1])
         plt.show()
 
 
@@ -270,7 +284,7 @@ def test_draw2(ep_list):
     plt.xlim(70059, 83333)
     plt.ylim(76429, 83468)
     plt.subplots_adjust(left=0.06, right=0.98, bottom=0.05, top=0.96)
-    show_map()
+    # show_map()
 
     x, y = zip(*ep_list)
     plt.plot(x, y, 'k+', alpha=0.3)
@@ -298,16 +312,17 @@ def save_file(center_points, key_area, ep_list, trace, label, veh_num):
             # print i, dist, area[2].decode('gbk')
 
             if dist < min_dist:
-                min_dist, name = dist, area[2].decode('gbk')
+                min_dist, name = dist, area[2]
         if min_dist > 400:
             lat, lng = xy2bl(pt[0], pt[1])
-            name = point_to_addr_new([lng, lat])
+            # name = point_to_addr_new([lng, lat])
+            name = str(lat) + "," + str(lng)
         # show text on map
         print lng, lat, name, min_dist
-        try:
-            plt.text(pt[0] + 100, pt[1] + 100, name, fontproperties='SimHei', fontsize=10)
-        except Exception as e:
-            print e.message
+        # try:
+        #     plt.text(pt[0] + 100, pt[1] + 100, name, fontproperties='SimHei', fontsize=10)
+        # except Exception as e:
+        #     print e.message
         area_list.append(name)
 
     bp_daily, ep_daily = {}, {}
@@ -363,13 +378,13 @@ def check_veh(vehi_num):
     #     return
     fig1 = plt.figure(figsize=(12, 6))
     ax = fig1.add_subplot(111)
-    print vehi_num.decode('gbk')
+    print vehi_num
     sql = "select vehicle_num, px, py, state, speed, speed_time" \
-          " from tb_gps_1805 where vehicle_num = '{0}'".format(vehi_num)
-    # sql = "select vehicle_num, px, py, state, speed, speed_time" \
-    #       " from tb_gps_1805 where vehicle_num = '{0}' and speed_time >= to_date" \
-    #       "('2018-05-01', 'yyyy-mm-dd') and speed_time < to_date('2018-05-02', '" \
-    #       "yyyy-mm-dd')".format(vehi_num)
+          " from tb_gps_1805 where vehicle_num = '{0}' order by speed_time".format(vehi_num)
+    sql = "select vehicle_num, px, py, state, speed, speed_time" \
+          " from tb_gps_1805 where vehicle_num = '{0}' and speed_time >= to_date" \
+          "('2018-05-15', 'yyyy-mm-dd') and speed_time < to_date('2018-05-30', '" \
+          "yyyy-mm-dd')".format(vehi_num)
 
     # ********* step 1. 取数据 **********
     cursor = conn.cursor()
@@ -445,10 +460,11 @@ def check_veh(vehi_num):
     key_area = get_key_area(conn)
     save_file(points, key_area, mod_list, trace_month, labels, vehi_num)
 
-    str_file = "./pic/" + vehi_num.decode('gbk') + ".png"
-    plt.savefig(str_file, dpi=200)
+    # str_file = "./pic/" + vehi_num.decode('gbk') + ".png"
+    # plt.savefig(str_file, dpi=200)
     # plt.show()
     plt.close(fig1)
 
 
-main(g_mark)
+# main(g_mark)
+west_lake()

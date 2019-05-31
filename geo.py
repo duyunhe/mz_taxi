@@ -3,7 +3,7 @@ from ctypes import *
 import math
 import numpy as np
 
-dll = WinDLL("CoordTransDLL.dll")
+dll = WinDLL("E:\job\mz_taxi\CoordTransDLL.dll")
 
 
 class BLH(Structure):
