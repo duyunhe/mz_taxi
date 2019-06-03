@@ -10,6 +10,8 @@ import cx_Oracle
 from time import clock
 import os
 from collections import defaultdict
+from geo import bl2xy
+from matplotlib.path import Path
 os.environ['NLS_LANG'] = 'SIMPLIFIED CHINESE_CHINA.AL32UTF8'
 
 
@@ -32,8 +34,8 @@ def debug_time(func):
 @debug_time
 def get_data(bt):
     conn = cx_Oracle.connect('mz/mz@192.168.11.88:1521/orcl')
-    et = bt + timedelta(hours=8)
-    veh = "浙ATF300"
+    et = bt + timedelta(hours=24)
+    veh = "浙AT5310"
     sql = "select vehicle_num, px, py, speed_time, state, speed from " \
           "hz.TB_GPS_1805 t where speed_time >= :1 and speed_time < :2 and vehicle_num = :3" \
           " order by speed_time"
@@ -46,11 +48,11 @@ def get_data(bt):
         lng, lat = map(float, item[1:3])
         if 119 < lng < 121 and 29 < lat < 31:
             veh = item[0]
-            # px, py = bl2xy(lat, lng)
+            px, py = bl2xy(lat, lng)
             state = int(item[4])
             stime = item[3]
             speed = float(item[5])
-            taxi_data = TaxiData(veh, lng, lat, stime, state, speed)
+            taxi_data = TaxiData(veh, px, py, stime, state, speed)
             trace_dict[veh].append(taxi_data)
     # print len(trace)
     # trace.sort(cmp1)
@@ -61,16 +63,29 @@ def get_data(bt):
 
 def get_points(filename):
     point_list = []
-    with open(filename) as fp:
-        for line in fp:
-            items = line.strip('\n').split(',')
-            lng, lat = map(float, items[:])
-            point_list.append([lng, lat])
+    fp = open(filename, 'r')
+    for line in fp.readlines():
+        items = line.strip('\n').split('\t')
+        lng, lat = map(float, items[:])
+        x, y = bl2xy(lat, lng)
+        point_list.append([x, y])
+    fp.close()
     return point_list
 
 
+def get_jq_path(filename):
+    xy_list = []
+    with open(filename, 'r') as fp:
+        line = fp.readline()
+        coords = line.split(';')
+        for coord in coords:
+            lng, lat = map(float, coord.split(',')[:])
+            x, y = bl2xy(lat, lng)
+            xy_list.append([x, y])
+    path = Path(xy_list)
+    return path
+
+
 def main():
-    dt = datetime(2018, 5, 1, 8)
+    dt = datetime(2018, 5, 1)
     get_data(dt)
-
-

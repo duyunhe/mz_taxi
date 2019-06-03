@@ -704,7 +704,7 @@ def main_vehicle(conn, vehi_num):
 
 
 def show_map():
-    way, node, edge = read_xml('jq0.xml')
+    way, node, edge = read_xml('../jq0.xml')
     draw_map(way, node, edge)
 
 
