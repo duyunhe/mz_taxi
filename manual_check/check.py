@@ -5,7 +5,7 @@
 # @File    : check.py
 
 
-from getData import get_data, get_points
+from getData import get_data, get_jq_points, get_jq_path
 from datetime import datetime, timedelta
 from common import geo_distance, debug_time
 import numpy as np
@@ -15,6 +15,11 @@ import matplotlib.pyplot as plt
 # from read_map import show_map
 from geo import xy2bl, bl2xy, calc_dist
 from matplotlib.path import Path
+
+
+NAME = 2
+NEAR_DIST = 100
+STAY_DURING = 600
 
 
 class StayRecord(object):
@@ -64,7 +69,7 @@ def check_5p(trace, pt_list):
         min_dist, sel_pt = 1e10, None
         for i, pt in enumerate(pt_list):
             dist = calc_dist([data.px, data.py], [pt[0], pt[1]])
-            if dist < 100 and dist < min_dist:
+            if dist < NEAR_DIST and dist < min_dist:
                 min_dist, sel_pt = dist, i
         if sel_pt is not None:
             if last_pt is None:
@@ -75,10 +80,13 @@ def check_5p(trace, pt_list):
                 et = data.stime
                 rec_dict[last_pt].append([bt, et])
                 last_pt = None
+    print "emerge"
     for idx, rec_list in rec_dict.items():
         if len(rec_list) >= 5:
+            name = pt_list[idx][NAME]
+            print name
             for rec in rec_list:
-                tup = [idx, rec[0], rec[1]]
+                tup = [name, rec[0], rec[1]]
                 emerge_rec.add_rec(tup)
     return emerge_rec
 
@@ -92,7 +100,7 @@ def check_10m(trace, pt_list):
         min_dist, sel_pt = 1e10, None
         for i, pt in enumerate(pt_list):
             dist = calc_dist([data.px, data.py], [pt[0], pt[1]])
-            if dist < 100 and dist < min_dist:
+            if dist < NEAR_DIST and dist < min_dist:
                 min_dist, sel_pt = dist, i
         if sel_pt is not None:
             if stay_pt is None:
@@ -102,13 +110,37 @@ def check_10m(trace, pt_list):
             if stay_pt is not None:
                 et = data.stime
                 during = int((et - bt).total_seconds())
-                if during > 600:
+                if during > STAY_DURING:
                     rec_dict[stay_pt].append(during)
                 stay_pt = None
+    print "stay"
     for idx, rec_list in rec_dict.items():
-        tup = [idx, round(sum(rec_list) / 60, 1), len(rec_list)]
+        name = pt_list[idx][NAME]
+        print name
+        tup = [name, round(sum(rec_list) / 60, 1), len(rec_list)]
         stay_rec.add_rec(tup)
     return stay_rec
+
+
+def check_ratio(trace):
+    path = get_jq_path("../data/jq.txt")
+    pt_list = []
+    for data in trace:
+        pt = [data.px, data.py]
+        pt_list.append(pt)
+    res = path.contains_points(pt_list)
+    all_cnt = len(res)
+    cnt = 0
+    a = res[175]
+    for r in res:
+        if r:
+            cnt += 1
+    # print cnt, all_cnt
+    try:
+        ratio = 1.0 * cnt / all_cnt
+    except ZeroDivisionError:
+        ratio = 0
+    print ratio, all_cnt
 
 
 def cluster(trace):
@@ -127,9 +159,9 @@ def cluster(trace):
     for i in range(len(labels)):
         x_dict[labels[i]].append(X[:, 0][i])
         y_dict[labels[i]].append(X[:, 1][i])
-    x, y = x_dict[6][100], y_dict[6][100]
-    lat, lng = xy2bl(x, y)
-    print lng, lat
+    # x, y = x_dict[7][50], y_dict[7][50]
+    # lat, lng = xy2bl(x, y)
+    # print lng, lat
     flag = 0
 
 
@@ -145,17 +177,27 @@ def draw_data(trace):
     plt.plot(x, y, linestyle='', marker='+')
 
 
-def main():
-    pt_list = get_points("point.txt")
-    dt = datetime(2018, 5, 6)
+def calc_trace(dt, pt_list):
     trace_dict = get_data(dt)
     for veh, trace in trace_dict.items():
+        check_ratio(trace)
         check_5p(trace, pt_list)
         check_10m(trace, pt_list)
         cluster(trace)
-        draw_data(trace)
+        # draw_data(trace)
+        # plt.show()
 
+
+def main():
+    pt_list = get_jq_points("../data/mzc_jq.csv")
+    dt = datetime(2018, 5, 1)
+    ft = dt + timedelta(weeks=1)
+    while dt < ft:
+        print dt
+        calc_trace(dt, pt_list)
+        dt += timedelta(days=1)
     # show_map()
-    plt.show()
+    # plt.show()
+
 
 main()

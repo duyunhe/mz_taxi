@@ -32,16 +32,23 @@ def debug_time(func):
 
 
 @debug_time
-def get_data(bt):
+def get_data(bt, all_data=False):
     conn = cx_Oracle.connect('mz/mz@192.168.11.88:1521/orcl')
     et = bt + timedelta(hours=24)
-    veh = "浙AT5310"
+    veh = "浙AT9501"
     sql = "select vehicle_num, px, py, speed_time, state, speed from " \
           "hz.TB_GPS_1805 t where speed_time >= :1 and speed_time < :2 and vehicle_num = :3" \
           " order by speed_time"
+    sql_all = "select vehicle_num, px, py, speed_time, state, speed from " \
+              "hz.TB_GPS_1805 t where speed_time >= :1 and speed_time < :2" \
+              " order by speed_time"
     tup = (bt, et, veh)
+    tup_all = (bt, et)
     cursor = conn.cursor()
-    cursor.execute(sql, tup)
+    if all_data:
+        cursor.execute(sql_all, tup_all)
+    else:
+        cursor.execute(sql, tup)
     trace_dict = defaultdict(list)
 
     for item in cursor.fetchall():
@@ -69,6 +76,19 @@ def get_points(filename):
         lng, lat = map(float, items[:])
         x, y = bl2xy(lat, lng)
         point_list.append([x, y])
+    fp.close()
+    return point_list
+
+
+def get_jq_points(filename):
+    point_list = []
+    fp = open(filename, 'r')
+    for line in fp.readlines():
+        items = line.strip('\n').split(',')
+        name = items[0]
+        lng, lat = map(float, items[1:])
+        x, y = bl2xy(lat, lng)
+        point_list.append([x, y, name])
     fp.close()
     return point_list
 
