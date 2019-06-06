@@ -20,6 +20,9 @@ class TaxiData:
         self.px, self.py, self.stime, self.state, self.speed = px, py, stime, state, speed
         self.veh = veh
 
+    def __sub__(self, other):
+        return (self.stime - other.stime).total_seconds()
+
 
 def debug_time(func):
     def wrapper(*args, **kwargs):
@@ -35,6 +38,7 @@ def debug_time(func):
 def get_data(bt, all_data=False):
     conn = cx_Oracle.connect('mz/mz@192.168.11.88:1521/orcl')
     et = bt + timedelta(hours=24)
+    bt = bt + timedelta(hours=6)
     veh = "浙AT9501"
     sql = "select vehicle_num, px, py, speed_time, state, speed from " \
           "hz.TB_GPS_1805 t where speed_time >= :1 and speed_time < :2 and vehicle_num = :3" \
@@ -48,6 +52,7 @@ def get_data(bt, all_data=False):
     if all_data:
         cursor.execute(sql_all, tup_all)
     else:
+        print veh
         cursor.execute(sql, tup)
     trace_dict = defaultdict(list)
 

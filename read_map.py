@@ -45,6 +45,9 @@ class TaxiData:
     def set_index(self, index):
         self.stop_index = index
 
+    def __sub__(self, other):
+        return (self.stime - other.stime).total_seconds()
+
 
 def cmp1(data1, data2):
     if data1.stime > data2.stime:
