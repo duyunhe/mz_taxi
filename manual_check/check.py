@@ -5,7 +5,9 @@
 # @File    : check.py
 
 
-from getData import get_data, get_jq_points, get_jq_path
+import cx_Oracle
+from getData import get_data, get_jq_points, get_jq_path, insert_pos_set, \
+    insert_stay_point, insert_pos_rec, insert_ratio, delete_all
 from datetime import datetime, timedelta
 from common import geo_distance, debug_time
 import numpy as np
@@ -15,10 +17,10 @@ import matplotlib.pyplot as plt
 # from read_map import show_map
 from geo import xy2bl, bl2xy, calc_dist
 from matplotlib.path import Path
-
+from sklearn.neighbors import KDTree
 
 NAME = 2
-NEAR_DIST = 100
+NEAR_DIST = 200
 STAY_DURING = 600
 EMG_CNT = 5
 
@@ -32,6 +34,7 @@ class StayRecord(object):
     """
     停留10分钟以上的记录[时间，点id]
     """
+
     def __init__(self):
         self.rec_list = []
 
@@ -43,6 +46,7 @@ class EmergeRecord(object):
     """
     出现5次以上的记录
     """
+
     def __init__(self):
         self.rec_list = []
 
@@ -67,18 +71,21 @@ def check_pt(trace, pt_list):
 
 
 # @debug_time
-def check_5p(trace, pt_list):
+def check_5p(trace, tree, pt_list):
     rec_dict = defaultdict(list)
     last_pt = None
     bt, et = None, None
     emerge_rec = EmergeRecord()
     emerge_set = set()
-    for data in trace:
-        min_dist, sel_pt = 1e10, None
-        for i, pt in enumerate(pt_list):
-            dist = calc_dist([data.px, data.py], [pt[0], pt[1]])
-            if dist < NEAR_DIST and dist < min_dist:
-                min_dist, sel_pt = dist, i
+    # kd-tree mode
+
+    vec = [[data.px, data.py] for data in trace]
+    dist, idx = tree.query(vec, k=1)
+
+    for i, data in enumerate(trace):
+        min_dist, sel_pt = dist[i][0], idx[i][0]
+        if min_dist > NEAR_DIST:
+            sel_pt = None
         if sel_pt is not None:
             if last_pt is None:
                 last_pt = sel_pt
@@ -94,10 +101,10 @@ def check_5p(trace, pt_list):
         if len(rec_list) >= EMG_CNT:
             # print name
             for rec in rec_list:
-                tup = [name, rec[0], rec[1]]
-                print name, rec[0], rec[1]
+                tup = [idx, rec[0], rec[1]]
+                # print name, rec[0], rec[1]
                 emerge_rec.add_rec(tup)
-        emerge_set.add(name)
+        emerge_set.add(idx)
     return emerge_rec, emerge_set
 
 
@@ -133,8 +140,8 @@ def check_10m(trace, pt_list):
     return stay_rec
 
 
-def check_ratio(trace):
-    path = get_jq_path("../data/jq.txt")
+# @debug_time
+def check_ratio(trace, path):
     pt_list = []
     for data in trace:
         pt = [data.px, data.py]
@@ -142,16 +149,17 @@ def check_ratio(trace):
     res = path.contains_points(pt_list)
     all_cnt = len(res)
     cnt = 0
-    a = res[175]
+    # a = res[175]
     for r in res:
         if r:
             cnt += 1
     # print cnt, all_cnt
     try:
-        ratio = 1.0 * cnt / all_cnt
+        ratio = round(100.0 * cnt / all_cnt, 1)
     except ZeroDivisionError:
         ratio = 0
     print ratio, all_cnt
+    return ratio
 
 
 def cluster(trace):
@@ -208,15 +216,22 @@ def draw_stay_points(stay_pts, pt_list):
     plt.plot(x, y, linestyle='', marker='o', alpha=1, color='r')
 
 
-def print_stay_point(stay_pts, pt_list):
-    for sp in stay_pts:
-        min_dist, sel_pt = 1e10, None
-        for pt in pt_list:
-            dist = calc_dist(sp.coord, [pt[0], pt[1]])
-            if dist < min_dist:
-                min_dist, sel_pt = dist, pt
-        if min_dist < 100:
-            print sel_pt[NAME], min_dist
+def print_stay_point(stay_pts, tree, pt_list):
+    stay_rec = {}
+    if len(stay_pts) == 0:
+        return stay_rec
+    vec = [pt.coord for pt in stay_pts]
+    dist, idx = tree.query(vec, k=1)
+    for i, sp in enumerate(stay_pts):
+        min_dist, sel_pt = dist[i][0], idx[i][0]
+        if min_dist < 200:
+            print sel_pt, pt_list[sel_pt][NAME]
+            try:
+                stay_rec[sel_pt][0] += 1
+                stay_rec[sel_pt][1] += (sp.dpt_time - sp.arv_time).total_seconds()
+            except KeyError:
+                stay_rec[sel_pt] = [1, (sp.dpt_time - sp.arv_time).total_seconds()]
+    return stay_rec
 
 
 def check_pos_list(pos_list):
@@ -228,22 +243,67 @@ def check_pos_list(pos_list):
         print pos, num
 
 
+def check_3d(conn, bt):
+    cur = conn.cursor()
+    lt = bt - timedelta(days=2)
+    sql = "select * from tb_mz1p where dbtime >= :1 and dbtime <= :2 order by dbtime"
+    tup = (lt, bt)
+    cur.execute(sql, tup)
+    veh_list = defaultdict(list)
+    for item in cur:
+        veh, pset, dbtime = item[:]
+        pids = pset.split(',')
+        id_set = set()
+        for pid in pids:
+            id_set.add(pid)
+        veh_list[veh].append([id_set, dbtime])
+
+    for veh, id_list in veh_list.items():
+        daily_time = {}
+        daily_set = {}
+        for pid in id_list:
+            id_set, db_time = pid[:]
+            idx = (db_time - lt).days
+            daily_set[idx] = id_set
+            daily_time[idx] = db_time
+
+        tup_list = []
+        try:
+            pos_set = daily_set[0]
+        except KeyError:
+            pos_set = set()
+        for i in range(1, 3):
+            try:
+                pos_set &= daily_set[i]
+            except KeyError:
+                pos_set = set()
+        if len(pos_set) > 0:
+            for pos in pos_set:
+                tup_list.append((veh, pos, bt))
+        sql = "insert into tb_mz3d values(:1,:2,:3)"
+        cur.executemany(sql, tup_list)
+        conn.commit()
+    cur.close()
+
+
 @debug_time
-def calc_trace(dt, pt_list):
-    trace_dict = get_data(dt)
-    set_list = []
+def calc_trace(dt, tree, pt_list, path):
+    trace_dict = get_data(dt, True)
     for veh, trace in trace_dict.items():
+        # 1. stay point
+        print veh
         pts = detect_stay_point(trace)
-        # print_stay_point(pts, pt_list)
-        draw_stay_points(pts, pt_list)
-        check_ratio(trace)
-        _, pos_set = check_5p(trace, pt_list)
-        set_list.append(pos_set)
-        check_10m(trace, pt_list)
-        # cluster(trace)
-        draw_data(trace)
-        plt.show()
-    return set_list[0]
+        stay_rec = print_stay_point(pts, tree, pt_list)
+        insert_stay_point(veh, stay_rec, dt)
+        # draw_stay_points(pts, pt_list)
+        ratio = check_ratio(trace, path)
+        insert_ratio(veh, ratio, dt)
+        # 2. emerge
+        pos_rec, pos_set = check_5p(trace, tree, pt_list)
+        insert_pos_rec(veh, pos_rec, dt)
+        insert_pos_set(veh, pos_set, dt)
+        # draw_data(trace)
+        # plt.show()
 
 
 def mean_coord(trace):
@@ -254,7 +314,8 @@ def mean_coord(trace):
     return np.mean(vec, axis=0)
 
 
-def detect_stay_point(trace, time_thread=300, dist_thread=100):
+# @debug_time
+def detect_stay_point(trace, time_thread=600, dist_thread=100):
     n = len(trace)
     i = 0
     stay_pts = []
@@ -272,18 +333,69 @@ def detect_stay_point(trace, time_thread=300, dist_thread=100):
 
 
 def main():
-    pt_list = get_jq_points("../data/mzc_jq.csv")
-    dt = datetime(2018, 5, 1)
-    ft = dt + timedelta(weeks=1)
-    pos_list = []
-    while dt < ft:
+    delete_all()
+    bt = datetime(2018, 5, 1)
+    et = datetime(2018, 5, 10)
+    dt = bt
+    while dt < et:
         print dt
-        pos_set = calc_trace(dt, pt_list)
-        pos_list.append(pos_set)
+        calc_daily(dt)
         dt += timedelta(days=1)
-    check_pos_list(pos_list)
-    # show_map()
-    # plt.show()
+    conn = cx_Oracle.connect('mz/mz@192.168.11.88:1521/orcl')
+    dt = bt
+    while dt < et:
+        check_taxi_day(conn, dt)
+        dt += timedelta(days=1)
+    conn.close()
+
+
+def check_taxi_day(conn, dt):
+    cur = conn.cursor()
+    set5p = set()
+    sql = "select distinct(vehiclenum) from tb_mz5p where dbtime = :1"
+    tup = (dt, )
+    cur.execute(sql, tup)
+    for item in cur:
+        veh = item[0]
+        set5p.add(veh)
+
+    ft = dt + timedelta(days=3)
+    sql = "select distinct(vehiclenum) from tb_mz3d where dbtime >= :1 and dbtime < :2"
+    set3d = set()
+    tup = (dt, ft)
+    cur.execute(sql, tup)
+    for item in cur:
+        veh = item[0]
+        set3d.add(veh)
+
+    sql = "select distinct(vehiclenum) from tb_mz10m where dbtime = :1"
+    set10m = set()
+    tup = (dt,)
+    cur.execute(sql, tup)
+    for item in cur:
+        veh = item[0]
+        set10m.add(veh)
+    set_all = set3d & set5p & set10m
+    tup_list = []
+    for veh in set_all:
+        print veh, dt
+        tup_list.append((veh, dt))
+    sql = "insert into tb_mz_taxi values(:1, :2)"
+    cur.executemany(sql, tup_list)
+    conn.commit()
+    cur.close()
+
+
+def calc_daily(dt):
+    path = get_jq_path("../data/jq.txt")
+    pt_list = get_jq_points("../data/mzc_jq.csv")
+    pt_vec = [[pt[0], pt[1]] for pt in pt_list]
+    tree = KDTree(pt_vec, leaf_size=2)
+    calc_trace(dt, tree, pt_list, path)
+    conn = cx_Oracle.connect('mz/mz@192.168.11.88:1521/orcl')
+    check_3d(conn, dt)
+    # check_taxi_day(conn, dt)
+    conn.close()
 
 
 main()
