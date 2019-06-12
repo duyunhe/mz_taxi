@@ -95,7 +95,7 @@ def check_5p(trace, tree, pt_list):
                 et = data.stime
                 rec_dict[last_pt].append([bt, et])
                 last_pt = None
-    print "emerge"
+    # print "emerge"
     for idx, rec_list in rec_dict.items():
         name = pt_list[idx][NAME]
         if len(rec_list) >= EMG_CNT:
@@ -158,7 +158,7 @@ def check_ratio(trace, path):
         ratio = round(100.0 * cnt / all_cnt, 1)
     except ZeroDivisionError:
         ratio = 0
-    print ratio, all_cnt
+    # print ratio, all_cnt
     return ratio
 
 
@@ -225,7 +225,7 @@ def print_stay_point(stay_pts, tree, pt_list):
     for i, sp in enumerate(stay_pts):
         min_dist, sel_pt = dist[i][0], idx[i][0]
         if min_dist < 200:
-            print sel_pt, pt_list[sel_pt][NAME]
+            # print sel_pt, pt_list[sel_pt][NAME]
             try:
                 stay_rec[sel_pt][0] += 1
                 stay_rec[sel_pt][1] += (sp.dpt_time - sp.arv_time).total_seconds()
@@ -291,7 +291,7 @@ def calc_trace(dt, tree, pt_list, path):
     trace_dict = get_data(dt, True)
     for veh, trace in trace_dict.items():
         # 1. stay point
-        print veh
+        # print veh
         pts = detect_stay_point(trace)
         stay_rec = print_stay_point(pts, tree, pt_list)
         insert_stay_point(veh, stay_rec, dt)
@@ -378,7 +378,7 @@ def check_taxi_day(conn, dt):
     set_all = set3d & set5p & set10m
     tup_list = []
     for veh in set_all:
-        print veh, dt
+        # print veh, dt
         tup_list.append((veh, dt))
     sql = "insert into tb_mz_taxi values(:1, :2)"
     cur.executemany(sql, tup_list)
