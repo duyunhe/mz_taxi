@@ -341,12 +341,6 @@ def main():
         print dt
         calc_daily(dt)
         dt += timedelta(days=1)
-    conn = cx_Oracle.connect('mz/mz@192.168.11.88:1521/orcl')
-    dt = bt
-    while dt < et:
-        check_taxi_day(conn, dt)
-        dt += timedelta(days=1)
-    conn.close()
 
 
 def check_taxi_day(conn, dt):
@@ -375,7 +369,16 @@ def check_taxi_day(conn, dt):
     for item in cur:
         veh = item[0]
         set10m.add(veh)
-    set_all = set3d & set5p & set10m
+
+    sql = "select distinct(vehiclenum) from tb_mz_ratio where dbtime = :1 and ratio >= 50"
+    setr = set()
+    tup = (dt,)
+    cur.execute(sql, tup)
+    for item in cur:
+        veh = item[0]
+        setr.add(veh)
+
+    set_all = set3d & set5p & set10m & setr
     tup_list = []
     for veh in set_all:
         # print veh, dt
@@ -398,4 +401,16 @@ def calc_daily(dt):
     conn.close()
 
 
-main()
+def main_check():
+    conn = cx_Oracle.connect('mz/mz@192.168.11.88:1521/orcl')
+    bt = datetime(2018, 5, 1)
+    et = datetime(2018, 5, 10)
+    dt = bt
+    while dt < et:
+        print dt
+        check_taxi_day(conn, dt)
+        dt += timedelta(days=1)
+    conn.close()
+
+
+main_check()
