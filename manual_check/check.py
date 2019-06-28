@@ -7,7 +7,7 @@
 
 import cx_Oracle
 from getData import get_data, get_jq_points, get_jq_path, insert_pos_set, \
-    insert_stay_point, insert_pos_rec, insert_ratio, delete_all
+    insert_stay_point, insert_pos_rec, insert_ratio, delete_all, get_jq_points_from_db, insert_detail
 from datetime import datetime, timedelta
 from common import geo_distance, debug_time
 import numpy as np
@@ -18,6 +18,9 @@ import matplotlib.pyplot as plt
 from geo import xy2bl, bl2xy, calc_dist
 from matplotlib.path import Path
 from sklearn.neighbors import KDTree
+from apscheduler.schedulers.blocking import BlockingScheduler
+import logging
+
 
 NAME = 2
 NEAR_DIST = 200
@@ -118,7 +121,7 @@ def check_10m(trace, pt_list):
         min_dist, sel_pt = 1e10, None
         for i, pt in enumerate(pt_list):
             dist = calc_dist([data.px, data.py], [pt[0], pt[1]])
-            if dist < NEAR_DIST and dist < min_dist:
+            if dist < 500 and dist < min_dist:
                 min_dist, sel_pt = dist, i
         if sel_pt is not None:
             if stay_pt is None:
@@ -216,21 +219,29 @@ def draw_stay_points(stay_pts, pt_list):
     plt.plot(x, y, linestyle='', marker='o', alpha=1, color='r')
 
 
-def print_stay_point(stay_pts, tree, pt_list):
+def print_stay_point(stay_pts, tree, path_list):
     stay_rec = {}
     if len(stay_pts) == 0:
         return stay_rec
     vec = [pt.coord for pt in stay_pts]
     dist, idx = tree.query(vec, k=1)
+    sel_pts = []
     for i, sp in enumerate(stay_pts):
-        min_dist, sel_pt = dist[i][0], idx[i][0]
-        if min_dist < 200:
+        min_dist, sel_pt = dist[i][0], idx[i][0]        # min dist & selected index
+        x, y = sp.coord[:]
+        if path_list[sel_pt].contains_point([x, y]):
+            b, l = xy2bl(x, y)
+            b = round(b, 6)
+            l = round(l, 6)
+            tup = [str(sel_pt), l, b]
+            sel_pts.append(tup)
             # print sel_pt, pt_list[sel_pt][NAME]
             try:
                 stay_rec[sel_pt][0] += 1
                 stay_rec[sel_pt][1] += (sp.dpt_time - sp.arv_time).total_seconds()
             except KeyError:
                 stay_rec[sel_pt] = [1, (sp.dpt_time - sp.arv_time).total_seconds()]
+    insert_detail(sel_pts)
     return stay_rec
 
 
@@ -287,13 +298,13 @@ def check_3d(conn, bt):
 
 
 @debug_time
-def calc_trace(dt, tree, pt_list, path):
-    trace_dict = get_data(dt, True)
+def calc_trace(dt, tree, pt_list, path, all_veh=True, path_list=None):
+    trace_dict = get_data(dt, all_veh)
     for veh, trace in trace_dict.items():
         # 1. stay point
         # print veh
         pts = detect_stay_point(trace)
-        stay_rec = print_stay_point(pts, tree, pt_list)
+        stay_rec = print_stay_point(pts, tree, path_list)
         insert_stay_point(veh, stay_rec, dt)
         # draw_stay_points(pts, pt_list)
         ratio = check_ratio(trace, path)
@@ -334,8 +345,8 @@ def detect_stay_point(trace, time_thread=600, dist_thread=100):
 
 def main():
     delete_all()
-    bt = datetime(2018, 5, 1)
-    et = datetime(2018, 5, 10)
+    bt = datetime(2019, 6, 1)
+    et = datetime(2019, 6, 10)
     dt = bt
     while dt < et:
         print dt
@@ -389,28 +400,40 @@ def check_taxi_day(conn, dt):
     cur.close()
 
 
-def calc_daily(dt):
+def calc_daily(dt, all_veh=True):
     path = get_jq_path("../data/jq.txt")
-    pt_list = get_jq_points("../data/mzc_jq.csv")
+    # pt_list = get_jq_points("../data/mzc_jq.csv")
+    pt_list, path_list = get_jq_points_from_db()
     pt_vec = [[pt[0], pt[1]] for pt in pt_list]
     tree = KDTree(pt_vec, leaf_size=2)
-    calc_trace(dt, tree, pt_list, path)
-    conn = cx_Oracle.connect('mz/mz@192.168.11.88:1521/orcl')
-    check_3d(conn, dt)
+    calc_trace(dt, tree, pt_list, path, all_veh, path_list)
+    # conn = cx_Oracle.connect('hzgps_taxi/twkjhzjtgps@192.168.0.69:1521/orcl')
+    # check_3d(conn, dt)
     # check_taxi_day(conn, dt)
-    conn.close()
+    # conn.close()
 
 
 def main_check():
-    conn = cx_Oracle.connect('mz/mz@192.168.11.88:1521/orcl')
-    bt = datetime(2018, 5, 1)
-    et = datetime(2018, 5, 10)
+    bt = datetime(2019, 4, 1)
+    et = datetime(2019, 5, 1)
     dt = bt
     while dt < et:
         print dt
-        check_taxi_day(conn, dt)
+        calc_daily(dt)
         dt += timedelta(days=1)
-    conn.close()
 
 
+def work():
+    # delete_all()
+    now = datetime.now() - timedelta(days=1)
+    dt = datetime(now.year, now.month, now.day)
+    calc_daily(dt)
+
+
+# delete_all()
 main_check()
+# if __name__ == '__main__':
+#     logging.basicConfig()
+#     scheduler = BlockingScheduler()
+#     scheduler.add_job(work, 'cron', hour='0', minute='40', max_instances=10)
+#     scheduler.start()
