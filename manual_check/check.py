@@ -5,21 +5,19 @@
 # @File    : check.py
 
 
-import cx_Oracle
 from getData import get_data, get_jq_points, get_jq_path, insert_pos_set, \
     insert_stay_point, insert_pos_rec, insert_ratio, delete_all, get_jq_points_from_db, insert_detail
 from datetime import datetime, timedelta
-from common import geo_distance, debug_time
+from common import calc_dist, debug_time
 import numpy as np
 from collections import defaultdict
 from sklearn.cluster import DBSCAN
 import matplotlib.pyplot as plt
-# from read_map import show_map
-from geo import xy2bl, bl2xy, calc_dist
-from matplotlib.path import Path
 from sklearn.neighbors import KDTree
+from coord import xy2bl
 from apscheduler.schedulers.blocking import BlockingScheduler
 import logging
+import multiprocessing
 
 
 NAME = 2
@@ -297,6 +295,41 @@ def check_3d(conn, bt):
     cur.close()
 
 
+def calc_trace_list(dt, tree, pt_list, jq_path, path_list, veh_list, trace_list):
+    for i, veh in enumerate(veh_list):
+        trace = trace_list[i]
+        pts = detect_stay_point(trace)
+        stay_rec = print_stay_point(pts, tree, path_list)       # temp
+        insert_stay_point(veh, stay_rec, dt)    # 10m
+        ratio = check_ratio(trace, jq_path)
+        insert_ratio(veh, ratio, dt)            # ratio
+        pos_rec, pos_set = check_5p(trace, tree, pt_list)
+        insert_pos_rec(veh, pos_rec, dt)        # 5p
+        insert_pos_set(veh, pos_set, dt)        # 1p
+
+
+@debug_time
+def calc_trace_m(dt, tree, pt_list, path, path_list):
+    trace_dict = get_data(dt, True)
+    trace_list, veh_list = [], []
+    for veh, trace in trace_dict.items():
+        trace_list.append(trace)
+        veh_list.append(veh)
+    # manager = multiprocessing.Manager()
+    proc_list = []
+    thread_num = 8
+    for i in range(thread_num):
+        p = multiprocessing.Process(target=calc_trace_list,
+                                    args=(dt, tree, pt_list, path, path_list,
+                                          veh_list[i::thread_num], trace_list[i::thread_num]))
+        p.daemon = True
+        proc_list.append(p)
+    for p in proc_list:
+        p.start()
+    for p in proc_list:
+        p.join()
+
+
 @debug_time
 def calc_trace(dt, tree, pt_list, path, all_veh=True, path_list=None):
     trace_dict = get_data(dt, all_veh)
@@ -407,10 +440,7 @@ def calc_daily(dt, all_veh=True):
     pt_vec = [[pt[0], pt[1]] for pt in pt_list]
     tree = KDTree(pt_vec, leaf_size=2)
     calc_trace(dt, tree, pt_list, path, all_veh, path_list)
-    # conn = cx_Oracle.connect('hzgps_taxi/twkjhzjtgps@192.168.0.69:1521/orcl')
-    # check_3d(conn, dt)
-    # check_taxi_day(conn, dt)
-    # conn.close()
+    calc_trace_m(dt, tree, pt_list, path, path_list)
 
 
 def main_check():

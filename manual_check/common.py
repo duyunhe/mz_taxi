@@ -7,14 +7,19 @@
 
 from math import radians, cos, sin, asin, sqrt
 from time import clock
+import numpy as np
 
 
-def geo_distance(lng1, lat1, lng2, lat2):
-    lng1, lat1, lng2, lat2 = map(radians, [lng1, lat1, lng2, lat2])
-    dlon = lng2 - lng1
-    dlat = lat2 - lat1
-    a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
-    dist = 2 * asin(sqrt(a)) * 6371 * 1000
+def calc_dist(pt0, pt1):
+    """
+    计算两点距离
+    :param pt0: [x0, y0]
+    :param pt1: [x1, y1]
+    :return: 
+    """
+    v0 = np.array(pt0)
+    v1 = np.array(pt1)
+    dist = np.linalg.norm(v0 - v1)
     return dist
 
 

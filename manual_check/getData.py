@@ -10,7 +10,7 @@ import cx_Oracle
 from time import clock
 import os
 from collections import defaultdict
-from geo import bl2xy
+from coord import bl2xy
 from matplotlib.path import Path
 os.environ['NLS_LANG'] = 'SIMPLIFIED CHINESE_CHINA.AL32UTF8'
 
@@ -34,32 +34,6 @@ def debug_time(func):
     return wrapper
 
 
-def insert_stay_point(veh, st_rec, dbtime):
-    if len(st_rec) == 0:
-        return
-    conn = cx_Oracle.connect('mz/mz@192.168.11.88:1521/orcl')
-    sql = "insert into tb_mz10m values(:1,:2,:3,:4,:5)"
-    cur = conn.cursor()
-    tup_list = []
-    for pt, rec in st_rec.items():
-        tup_list.append([veh, str(pt), int(rec[1] / 60), rec[0], dbtime])
-    cur.executemany(sql, tup_list)
-    conn.commit()
-    cur.close()
-    conn.close()
-
-
-def insert_ratio(veh, r, dbtime):
-    conn = cx_Oracle.connect('mz/mz@192.168.11.88:1521/orcl')
-    sql = "insert into tb_mz_ratio values(:1,:2,:3)"
-    tup = (veh, r, dbtime)
-    cur = conn.cursor()
-    cur.execute(sql, tup)
-    conn.commit()
-    cur.close()
-    conn.close()
-
-
 def insert_jq_points():
     fp = open("../data/mzc_jq.csv")
     i = 0
@@ -72,7 +46,7 @@ def insert_jq_points():
         tup_list.append([i, name, lng, lat])
         i += 1
     fp.close()
-    conn = cx_Oracle.connect('mz/mz@192.168.11.88:1521/orcl')
+    conn = cx_Oracle.connect('hzgps_taxi/twkjhzjtgps@192.168.0.69:1521/orcl')
     sql = "insert into tb_mz_jq values(:1,:2,:3,:4)"
     cur = conn.cursor()
     cur.executemany(sql, tup_list)
@@ -81,8 +55,49 @@ def insert_jq_points():
     conn.close()
 
 
+def insert_detail(stay_pts):
+    if len(stay_pts) == 0:
+        return
+    conn = cx_Oracle.connect('hzgps_taxi/twkjhzjtgps@192.168.0.69:1521/orcl')
+    sql = "insert into tb_mz_temp values(:1,:2,:3)"
+    cur = conn.cursor()
+    tup_list = []
+    for pt in stay_pts:
+        tup_list.append(pt)
+    cur.executemany(sql, tup_list)
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def insert_stay_point(veh, st_rec, dbtime):
+    if len(st_rec) == 0:
+        return
+    conn = cx_Oracle.connect('hzgps_taxi/twkjhzjtgps@192.168.0.69:1521/orcl')
+    sql = "insert into tb_mz10m values(:1,:2,:3,:4,:5)"
+    cur = conn.cursor()
+    tup_list = []
+    for pt, rec in st_rec.items():
+        tup_list.append([veh, str(pt), int(rec[1] / 60), rec[0], dbtime])
+    cur.executemany(sql, tup_list)
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def insert_ratio(veh, r, dbtime):
+    conn = cx_Oracle.connect('hzgps_taxi/twkjhzjtgps@192.168.0.69:1521/orcl')
+    sql = "insert into tb_mz_ratio values(:1,:2,:3)"
+    tup = (veh, r, dbtime)
+    cur = conn.cursor()
+    cur.execute(sql, tup)
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
 def insert_pos_rec(veh, pos_rec, dbtime):
-    conn = cx_Oracle.connect('mz/mz@192.168.11.88:1521/orcl')
+    conn = cx_Oracle.connect('hzgps_taxi/twkjhzjtgps@192.168.0.69:1521/orcl')
     sql = "insert into tb_mz5p values(:1,:2,:3,:4,:5)"
     tup_list = []
     for rec in pos_rec.rec_list:
@@ -96,7 +111,7 @@ def insert_pos_rec(veh, pos_rec, dbtime):
 
 
 def delete_all():
-    conn = cx_Oracle.connect('mz/mz@192.168.11.88:1521/orcl')
+    conn = cx_Oracle.connect('hzgps_taxi/twkjhzjtgps@192.168.0.69:1521/orcl')
     cur = conn.cursor()
     sql = "delete from tb_mz3d"
     cur.execute(sql)
@@ -110,6 +125,8 @@ def delete_all():
     cur.execute(sql)
     sql = "delete from tb_mz_taxi"
     cur.execute(sql)
+    sql = "delete from tb_mz_temp"
+    cur.execute(sql)
     conn.commit()
     cur.close()
     conn.close()
@@ -120,11 +137,11 @@ def insert_pos_set(veh, pos_set, dbtime):
     :param veh
     :param pos_set: set of id
     :param dbtime
-    :return: 
+    :return:
     """
     if len(pos_set) == 0:
         return
-    conn = cx_Oracle.connect('mz/mz@192.168.11.88:1521/orcl')
+    conn = cx_Oracle.connect('hzgps_taxi/twkjhzjtgps@192.168.0.69:1521/orcl')
     sql = "insert into tb_mz1p values(:1,:2,:3)"
     id_list = sorted(map(str, list(pos_set)))
     ptid = ",".join(id_list)
@@ -138,17 +155,16 @@ def insert_pos_set(veh, pos_set, dbtime):
 
 @debug_time
 def get_data(bt, all_data=False):
-    conn = cx_Oracle.connect('mz/mz@192.168.11.88:1521/orcl')
-    et = bt + timedelta(hours=24)
-    bt = bt + timedelta(hours=6)
-    veh = "浙AT9501"
+    conn = cx_Oracle.connect('hzgps_taxi/twkjhzjtgps@192.168.0.69:1521/orcl')
+    et = bt + timedelta(hours=20)
+    bt = bt + timedelta(hours=8)
+    veh = "浙ATF716"
     sql = "select vehicle_num, px, py, speed_time, state, speed from " \
-          "hz.TB_GPS_1805 t where speed_time >= :1 and speed_time < :2 and vehicle_num = :3" \
-          " order by speed_time"
+          "TB_GPS_{1}{0:02d} t where speed_time >= :1 and speed_time < :2 and vehicle_num = :3" \
+          " order by speed_time".format(bt.month, bt.year % 100)
     sql_all = "select vehicle_num, px, py, speed_time, state, speed from " \
-              "hz.TB_GPS_1805 t where speed_time >= :1 and speed_time < :2 and" \
-              " (vehicle_num = '浙AT9501' or vehicle_num = '浙ATD568' or vehicle_num = " \
-              "'浙ATD560' or vehicle_num = '浙AT4964') order by speed_time"
+              "TB_GPS_{1}{0:02d} t where speed_time >= :1 and speed_time < :2" \
+              " order by speed_time".format(bt.month, bt.year % 100)
     tup = (bt, et, veh)
     tup_all = (bt, et)
     cursor = conn.cursor()
@@ -176,6 +192,17 @@ def get_data(bt, all_data=False):
     return trace_dict
 
 
+def get_path(line):
+    xy_list = []
+    items = line.split(';')
+    for item in items:
+        lng, lat = map(float, item.split(',')[:])
+        x, y = bl2xy(lat, lng)
+        xy_list.append([x, y])
+    path = Path(xy_list)
+    return path
+
+
 def get_points(filename):
     point_list = []
     fp = open(filename, 'r')
@@ -201,6 +228,24 @@ def get_jq_points(filename):
     return point_list
 
 
+def get_jq_points_from_db():
+    conn = cx_Oracle.connect('hzgps_taxi/twkjhzjtgps@192.168.0.69:1521/orcl')
+    cur = conn.cursor()
+    sql = "select * from tb_mz_jq order by pid"
+    point_list = []
+    path_list = []
+    cur.execute(sql)
+    for item in cur:
+        pid, name, lng, lat, path = item[:]
+        path = get_path(path)
+        x, y = bl2xy(lat, lng)
+        point_list.append([x, y, name])
+        path_list.append(path)
+    cur.close()
+    conn.close()
+    return point_list, path_list
+
+
 def get_jq_path(filename):
     xy_list = []
     with open(filename, 'r') as fp:
@@ -218,5 +263,3 @@ def main():
     dt = datetime(2018, 5, 1)
     get_data(dt)
 
-
-# insert_jq_points()
