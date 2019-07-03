@@ -38,6 +38,7 @@ def main():
         min_cost = nn.calc_loss(data, o)
     else:
         min_cost = 1e20
+    nn.reset_param()
 
     for i in range(100):
         row = X.shape[0]

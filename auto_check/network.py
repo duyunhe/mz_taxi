@@ -31,6 +31,10 @@ class NeuralNetwork:
         except WindowsError:
             pass
 
+    def reset_param(self):
+        self.wih = np.random.normal(0.0, self.hidden_nodes ** -.5, (self.hidden_nodes, self.input_nodes))
+        self.who = np.random.normal(0.0, self.output_nodes ** -.5, (self.output_nodes, self.hidden_nodes))
+
     def train(self, inputs_list, targets_list):
         inputs = np.array(inputs_list, ndmin=2).T
         targets = np.array(targets_list, ndmin=2).T
