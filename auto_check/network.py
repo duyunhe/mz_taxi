@@ -7,6 +7,7 @@
 
 import numpy as np
 import scipy.special
+import os
 
 
 class NeuralNetwork:
@@ -24,7 +25,11 @@ class NeuralNetwork:
         self.who = np.random.normal(0.0, self.output_nodes ** -.5, (self.output_nodes, self.hidden_nodes))
 
         self.activation_function = lambda x: scipy.special.expit(x)
-        pass
+        self.dir_name = "./cfg"
+        try:
+            os.mkdir(self.dir_name)
+        except WindowsError:
+            pass
 
     def train(self, inputs_list, targets_list):
         inputs = np.array(inputs_list, ndmin=2).T
@@ -53,3 +58,22 @@ class NeuralNetwork:
     def print_param(self):
         print self.wih
         print self.who
+
+    def save_param(self):
+        filename_who = self.dir_name + "/who.txt"
+        filename_wih = self.dir_name + "/wih.txt"
+        np.savetxt(filename_who, self.who, delimiter=',')
+        np.savetxt(filename_wih, self.wih, delimiter=',')
+
+    def load_param(self):
+        filename_who = self.dir_name + "/who.txt"
+        filename_wih = self.dir_name + "/wih.txt"
+        try:
+            self.who = np.loadtxt(filename_who, delimiter=',', ndmin=2)
+            self.wih = np.loadtxt(filename_wih, delimiter=',', ndmin=2)
+        except IOError:
+            return 1
+        return 0
+
+    def read_param(self):
+        pass

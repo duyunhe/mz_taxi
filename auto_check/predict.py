@@ -32,12 +32,24 @@ def main():
     nn = NeuralNetwork(i_num, h_num, o_num, learning_rate)
     data = X[:, 0:i_num]
     o = X[:, i_num:].T
-    for i in range(1000):
+
+    ret = nn.load_param()
+    if ret == 0:
+        min_cost = nn.calc_loss(data, o)
+    else:
+        min_cost = 1e20
+
+    for i in range(100):
         row = X.shape[0]
         for j in range(row):
             input_list, target = X[j, :i_num], X[j, i_num:]
             nn.train(input_list, target)
         print i, nn.calc_loss(data, o)
+
+    cost = nn.calc_loss(data, o)
+    if cost < min_cost:
+        print "new param found"
+        nn.save_param()
 
     q = [0, 0, 0.5, 0, 0]
     print nn.query(q)
