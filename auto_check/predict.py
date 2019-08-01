@@ -8,6 +8,7 @@
 from network import NeuralNetwork
 import numpy as np
 from math import log
+from sklearn.neural_network import MLPClassifier
 
 
 def read_data():
@@ -28,7 +29,7 @@ def judge(x):
 
 def main():
     X = read_data()
-    i_num, h_num, o_num, learning_rate = 5, 6, 1, 0.1
+    i_num, h_num, o_num, learning_rate = 5, 6, 1, 0.005
     nn = NeuralNetwork(i_num, h_num, o_num, learning_rate)
     data = X[:, 0:i_num]
     o = X[:, i_num:].T
@@ -38,14 +39,23 @@ def main():
         min_cost = nn.calc_loss(data, o)
     else:
         min_cost = 1e20
+    print 'min cost', min_cost
     nn.reset_param()
 
-    for i in range(100):
+    beta = .95
+    last_cost = 1e20
+    for i in range(10000):
         row = X.shape[0]
         for j in range(row):
             input_list, target = X[j, :i_num], X[j, i_num:]
             nn.train(input_list, target)
-        print i, nn.calc_loss(data, o)
+        learning_rate *= beta
+        if i % 10 == 0:
+            cost = nn.calc_loss(data, o)
+            print i, cost
+            if last_cost - cost < 1e-6:
+                break
+            last_cost = cost
 
     cost = nn.calc_loss(data, o)
     if cost < min_cost:
@@ -54,6 +64,18 @@ def main():
 
     q = [0, 0, 0.5, 0, 0]
     print nn.query(q)
+
+
+def main2():
+    X = read_data()
+    i_num = 5
+    data = X[:, 0:i_num]
+    o = X[:, i_num:].T
+
+
+def query():
+    nn = NeuralNetwork()
+    nn.load_param()
 
 
 main()

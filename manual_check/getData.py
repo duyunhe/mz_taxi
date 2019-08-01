@@ -153,6 +153,17 @@ def insert_pos_set(veh, pos_set, dbtime):
     conn.close()
 
 
+def insert_gps_error(veh, dbtime):
+    conn = cx_Oracle.connect('hzgps_taxi/twkjhzjtgps@192.168.0.69:1521/orcl')
+    sql = "insert into tb_mz_error values(:1,:2,:3)"
+    tup = (veh, '0', dbtime)
+    cur = conn.cursor()
+    cur.execute(sql, tup)
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
 @debug_time
 def get_data(bt, all_data=False):
     conn = cx_Oracle.connect('hzgps_taxi/twkjhzjtgps@192.168.0.69:1521/orcl')

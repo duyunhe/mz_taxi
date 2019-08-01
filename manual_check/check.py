@@ -6,7 +6,8 @@
 
 
 from getData import get_data, get_jq_points, get_jq_path, insert_pos_set, \
-    insert_stay_point, insert_pos_rec, insert_ratio, delete_all, get_jq_points_from_db, insert_detail
+    insert_stay_point, insert_pos_rec, insert_ratio, delete_all, get_jq_points_from_db, insert_detail, \
+    insert_gps_error
 from datetime import datetime, timedelta
 from common import calc_dist, debug_time
 import numpy as np
@@ -295,6 +296,21 @@ def check_3d(conn, bt):
     cur.close()
 
 
+def check_error(trace):
+    """
+    轨迹缺失30分钟
+    :return: 
+    """
+    last_data = None
+    for data in trace:
+        if last_data:
+            itv = data - last_data
+            if itv > 1800:
+                return True
+        last_data = data
+    return False
+
+
 def calc_trace_list(dt, tree, pt_list, jq_path, path_list, veh_list, trace_list):
     for i, veh in enumerate(veh_list):
         trace = trace_list[i]
@@ -348,6 +364,9 @@ def calc_trace(dt, tree, pt_list, path, all_veh=True, path_list=None):
         insert_pos_set(veh, pos_set, dt)
         # draw_data(trace)
         # plt.show()
+        # 3. trace lost > 30 min
+        if check_error(trace):
+            insert_gps_error(veh, dt)
 
 
 def mean_coord(trace):
@@ -440,17 +459,18 @@ def calc_daily(dt, all_veh=True):
     pt_vec = [[pt[0], pt[1]] for pt in pt_list]
     tree = KDTree(pt_vec, leaf_size=2)
     calc_trace(dt, tree, pt_list, path, all_veh, path_list)
-    calc_trace_m(dt, tree, pt_list, path, path_list)
+    # calc_trace_m(dt, tree, pt_list, path, path_list)
 
 
 def main_check():
-    bt = datetime(2019, 4, 1)
-    et = datetime(2019, 5, 1)
+    bt = datetime(2019, 7, 1)
+    et = datetime(2019, 7, 16)
     dt = bt
     while dt < et:
-        print dt
+        print 'main_check', dt
         calc_daily(dt)
         dt += timedelta(days=1)
+        print "running at", datetime.now()
 
 
 def work():
@@ -458,12 +478,13 @@ def work():
     now = datetime.now() - timedelta(days=1)
     dt = datetime(now.year, now.month, now.day)
     calc_daily(dt)
+    print "running at", datetime.now()
 
 
 # delete_all()
-main_check()
-# if __name__ == '__main__':
-#     logging.basicConfig()
-#     scheduler = BlockingScheduler()
-#     scheduler.add_job(work, 'cron', hour='0', minute='40', max_instances=10)
-#     scheduler.start()
+# main_check()
+if __name__ == '__main__':
+    logging.basicConfig()
+    scheduler = BlockingScheduler()
+    scheduler.add_job(work, 'cron', hour='0', minute='10', max_instances=10)
+    scheduler.start()
